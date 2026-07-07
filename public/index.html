@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>now｜一行命令部署靜態網站</title>
-<meta name="description" content="now 是一支 Rust CLI，把靜態網站交給 Firebase、Azure 與 FTP 的既有 CLI 部署。選好目錄、組好命令、輸出預設 URL，部署從多步驟變成單一步驟。">
+<meta name="description" content="now 讓靜態網站部署收斂成一行命令，整合 Firebase Hosting、Azure 與 FTP 的既有部署流程。選好目錄、組好命令、輸出預設 URL，部署從多步驟變成單一步驟。">
 <meta name="author" content="doggy8088">
-<meta name="keywords" content="now, Rust CLI, 靜態網站部署, Firebase Hosting, Azure Blob, Azure Static Web Apps, FTP, 部署工具, static site deploy, devtools">
+<meta name="keywords" content="now, 靜態網站部署, Firebase Hosting, Azure Blob, Azure Static Web Apps, FTP, 部署工具, static site deploy, devtools">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#1a1410">
 <meta name="color-scheme" content="dark">
@@ -17,7 +17,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="now">
 <meta property="og:title" content="now｜一行命令部署靜態網站">
-<meta property="og:description" content="把靜態網站交給既有 provider CLI 部署。一行命令，然後完成。">
+<meta property="og:description" content="把靜態網站交給既有部署流程。一行命令，然後完成。">
 <meta property="og:url" content="https://now.gh.miniasp.com/">
 <meta property="og:locale" content="zh_TW">
 <meta property="og:locale:alternate" content="en_US">
@@ -31,7 +31,7 @@
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="now｜一行命令部署靜態網站">
-<meta name="twitter:description" content="把靜態網站交給既有 provider CLI 部署。一行命令，然後完成。">
+<meta name="twitter:description" content="把靜態網站交給既有部署流程。一行命令，然後完成。">
 <meta name="twitter:image" content="https://now.gh.miniasp.com/assets/og-image.png">
 <meta name="twitter:image:alt" content="now — 一行命令部署靜態網站">
 <meta name="twitter:creator" content="@doggy8088">
@@ -70,9 +70,9 @@
     </div>
     <div class="wrap hero-grid">
       <div class="reveal stagger" style="--i:0">
-        <span class="eyebrow">Rust CLI · v0.1</span>
+        <span class="eyebrow">靜態網站部署 · v0.1</span>
         <h1 id="hero-title" class="hero-headline">一行命令，<br>把靜態網站<em>交給雲端</em>。</h1>
-        <p class="lede"><code>now</code> 是一支 Rust CLI，整合 Firebase、Azure 與 FTP 的既有部署 CLI。選好可發布目錄、組好 provider 命令、部署後輸出預設 URL；部署從多步驟，變成單一步驟。</p>
+        <p class="lede"><code>now</code> 整合 Firebase Hosting、Azure 與 FTP 的既有部署流程。選好可發布目錄、組好 provider 命令、部署後輸出預設 URL；部署從多步驟，變成單一步驟。</p>
         <div class="hero-cta">
           <a class="btn btn--primary" href="#install">開始使用 <span class="arrow">→</span></a>
           <span class="cmd"><span class="prompt">$</span> npm install -g @willh/now<button class="copy" data-copy="npm install -g @willh/now" aria-label="複製命令">複製</button></span>
@@ -113,7 +113,7 @@
       <div class="three">
         <div class="item reveal" style="--i:0">
           <h3>不重新實作雲端協定</h3>
-          <p>初版重點是包裝與協調，不是重寫 Firebase、Azure 或 FTP 的部署邏輯。實際部署交給各 provider 已有的 CLI，你既有的登入狀態與權限都直接沿用。</p>
+          <p>初版重點是包裝與協調，不是重寫 Firebase Hosting、Azure 或 FTP 的部署邏輯。實際部署交給各 provider 已有的 CLI，你既有的登入狀態與權限都直接沿用。</p>
         </div>
         <div class="item reveal" style="--i:1">
           <h3>一致的命令，四個平台</h3>
@@ -224,7 +224,7 @@
           <h3>合併優先序</h3>
           <p>CLI flags &gt; <code>.now.json</code> &gt; <code>~/.config/now/settings.json</code>。本機設定覆寫全域，命令列 flag 覆寫一切。</p>
           <h3 style="margin-top:1.5rem">安全性</h3>
-          <p>token、password、secret、account key 一律不寫進設定檔。Firebase 用 <code>firebase login</code>、Azure 用 <code>az login</code>、SWA 用環境變數、FTP 用環境變數。<code>now config set</code> 也會擋下明顯像祕密的 key。</p>
+          <p>token、password、secret、account key 一律不寫進設定檔。Firebase Hosting 用 <code>firebase login</code>、Azure 用 <code>az login</code>、SWA 用環境變數、FTP 用環境變數。<code>now config set</code> 也會擋下明顯像祕密的 key。</p>
           <div class="cmdline" style="margin-top:1rem">$ now config doctor  <span class="muted" style="margin-left:.6rem"># 檢查設定與 provider CLI</span></div>
         </div>
       </div>
@@ -286,7 +286,7 @@
     <div class="footer-grid">
       <div>
         <a class="brand" href="#top">now<span class="dot">.</span></a>
-        <p style="margin-top:1rem">一支 Rust CLI，把靜態網站交給既有 provider CLI 部署。不重寫雲端協定，只把流程收攏成一步。</p>
+        <p style="margin-top:1rem">把靜態網站交給既有 provider 部署流程。不重寫雲端協定，只把流程收攏成一步。</p>
       </div>
       <div>
         <h4>資源</h4>
@@ -308,8 +308,8 @@
       </div>
     </div>
     <div class="footer-bottom">
-      <span>MIT License · © doggy8088/now</span>
-      <span>以 Rust 打造，在午後陽光裡部署。</span>
+      <span>MIT License · © 2026 Will 保哥</span>
+      <span>在午後陽光裡部署靜態網站。</span>
     </div>
   </div>
 </footer>
