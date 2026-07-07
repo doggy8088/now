@@ -8,3 +8,6 @@
 .env.*
 .now.json
 dist/
+
+# impeccable skill working cache
+.impeccable/
