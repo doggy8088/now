@@ -14,16 +14,36 @@ pub struct AzureBlobUploadSummary {
     pub bytes: u64,
 }
 
+fn apply_prefix(url: &mut Url, prefix: Option<&str>) -> Result<()> {
+    if let Some(prefix) = prefix {
+        let prefix_trimmed = prefix.trim();
+        if !prefix_trimmed.is_empty() {
+            let mut segments = url
+                .path_segments_mut()
+                .map_err(|_| anyhow!("Azure Storage Blob SAS URL cannot be used as a blob base URL"))?;
+            segments.pop_if_empty();
+            for part in prefix_trimmed.split('/') {
+                if !part.is_empty() {
+                    segments.push(part);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn display_upload_command(
     config: &NowConfig,
     env_file: Option<&EnvFile>,
     source: &Path,
 ) -> Result<String> {
     let sas_url = sas_url(config, env_file)?;
+    let mut url = Url::parse(&sas_url)?;
+    apply_prefix(&mut url, config.azure_blob.prefix.as_deref())?;
     Ok(format!(
         "Azure Storage Blob SAS upload {} -> {}",
         source.display(),
-        mask_sas_url(&sas_url)?
+        mask_sas_url(url.as_str())?
     ))
 }
 
@@ -32,7 +52,11 @@ pub fn upload_directory(
     env_file: Option<&EnvFile>,
     source: &Path,
 ) -> Result<AzureBlobUploadSummary> {
-    upload_directory_to_sas_url(&sas_url(config, env_file)?, source)
+    upload_directory_to_sas_url(
+        &sas_url(config, env_file)?,
+        config.azure_blob.prefix.as_deref(),
+        source,
+    )
 }
 
 pub fn public_blob_url_for_relative_path(
@@ -41,7 +65,11 @@ pub fn public_blob_url_for_relative_path(
     relative_path: &Path,
 ) -> Option<String> {
     let sas_url = optional_sas_url(config, env_file)?;
-    let mut url = blob_url_for_relative_path(&sas_url, relative_path).ok()?;
+    let mut url = blob_url_for_relative_path(
+        &sas_url,
+        config.azure_blob.prefix.as_deref(),
+        relative_path,
+    ).ok()?;
     url.set_query(None);
     Some(url.to_string())
 }
@@ -49,10 +77,15 @@ pub fn public_blob_url_for_relative_path(
 pub fn public_base_url(config: &NowConfig, env_file: Option<&EnvFile>) -> Option<String> {
     let mut url = Url::parse(&optional_sas_url(config, env_file)?).ok()?;
     url.set_query(None);
+    apply_prefix(&mut url, config.azure_blob.prefix.as_deref()).ok()?;
     Some(url.to_string())
 }
 
-pub fn upload_directory_to_sas_url(sas_url: &str, source: &Path) -> Result<AzureBlobUploadSummary> {
+pub fn upload_directory_to_sas_url(
+    sas_url: &str,
+    prefix: Option<&str>,
+    source: &Path,
+) -> Result<AzureBlobUploadSummary> {
     if !source.is_dir() {
         bail!(
             "Azure Storage Blob source path is not a directory: {}",
@@ -70,7 +103,7 @@ pub fn upload_directory_to_sas_url(sas_url: &str, source: &Path) -> Result<Azure
         }
 
         let relative = entry.path().strip_prefix(source)?;
-        let url = blob_url_for_relative_path(sas_url, relative)?;
+        let url = blob_url_for_relative_path(sas_url, prefix, relative)?;
         let body = fs::read(entry.path())
             .with_context(|| format!("failed to read {}", entry.path().display()))?;
         let content_type = content_type_for_path(entry.path());
@@ -85,7 +118,11 @@ pub fn upload_directory_to_sas_url(sas_url: &str, source: &Path) -> Result<Azure
     Ok(summary)
 }
 
-pub fn blob_url_for_relative_path(sas_url: &str, relative_path: &Path) -> Result<Url> {
+pub fn blob_url_for_relative_path(
+    sas_url: &str,
+    prefix: Option<&str>,
+    relative_path: &Path,
+) -> Result<Url> {
     let mut url = Url::parse(sas_url).context("Azure Storage Blob SAS URL must be a valid URL")?;
     let has_container_path = url
         .path_segments()
@@ -94,6 +131,8 @@ pub fn blob_url_for_relative_path(sas_url: &str, relative_path: &Path) -> Result
     if !has_container_path {
         bail!("Azure Storage Blob SAS URL must include a container path");
     }
+
+    apply_prefix(&mut url, prefix)?;
 
     {
         let mut segments = url
@@ -154,7 +193,7 @@ fn put_blob(client: &Client, url: Url, body: &[u8], content_type: &'static str) 
 fn sas_url(config: &NowConfig, env_file: Option<&EnvFile>) -> Result<String> {
     let env_name = sas_url_env_name(config);
     optional_sas_url(config, env_file).with_context(|| {
-        format!("environment variable {env_name} is required for azure_blob.sas_url_env")
+        format!("environment variable {env_name} is required for provider Azure Storage Blob")
     })
 }
 
@@ -210,6 +249,7 @@ mod tests {
     fn builds_blob_urls_from_container_sas_url() {
         let url = blob_url_for_relative_path(
             "https://acct.blob.core.windows.net/$web?sv=1&sig=secret",
+            None,
             Path::new("assets/app.js"),
         )
         .unwrap();
@@ -217,6 +257,21 @@ mod tests {
         assert_eq!(
             url.as_str(),
             "https://acct.blob.core.windows.net/$web/assets/app.js?sv=1&sig=secret"
+        );
+    }
+
+    #[test]
+    fn builds_blob_urls_with_prefix_from_container_sas_url() {
+        let url = blob_url_for_relative_path(
+            "https://acct.blob.core.windows.net/$web?sv=1&sig=secret",
+            Some("my-prefix/sub"),
+            Path::new("assets/app.js"),
+        )
+        .unwrap();
+
+        assert_eq!(
+            url.as_str(),
+            "https://acct.blob.core.windows.net/$web/my-prefix/sub/assets/app.js?sv=1&sig=secret"
         );
     }
 
@@ -238,6 +293,7 @@ mod tests {
         let config = NowConfig {
             azure_blob: crate::config::AzureBlobConfig {
                 sas_url_env: Some("NOW_AZURE_BLOB_SAS_URL".to_owned()),
+                prefix: Some("my-project".to_owned()),
                 ..Default::default()
             },
             ..NowConfig::default()
@@ -246,11 +302,11 @@ mod tests {
         assert_eq!(
             public_blob_url_for_relative_path(&config, Some(&env_file), Path::new("index.html"))
                 .as_deref(),
-            Some("https://infinitybin.blob.core.windows.net/now/now/index.html")
+            Some("https://infinitybin.blob.core.windows.net/now/now/my-project/index.html")
         );
         assert_eq!(
             public_base_url(&config, Some(&env_file)).as_deref(),
-            Some("https://infinitybin.blob.core.windows.net/now/now")
+            Some("https://infinitybin.blob.core.windows.net/now/now/my-project")
         );
     }
 
@@ -277,7 +333,7 @@ mod tests {
         });
 
         let sas_url = format!("http://{address}/container?sv=1&sig=secret");
-        let summary = upload_directory_to_sas_url(&sas_url, site.path()).unwrap();
+        let summary = upload_directory_to_sas_url(&sas_url, None, site.path()).unwrap();
         handle.join().unwrap();
 
         assert_eq!(summary.files, 1);

@@ -303,6 +303,48 @@ fn azure_blob_dry_run_does_not_require_azure_cli_or_print_sas_secret() {
 }
 
 #[test]
+fn azure_blob_dry_run_supports_prefix_and_masks_sas() {
+    let site = TempDir::new().unwrap();
+    let config_home = TempDir::new().unwrap();
+    site.child("public/index.html").write_str("ok").unwrap();
+    site.child(".now.json")
+        .write_str(
+            r#"{
+  "provider": "azure-storage-blob",
+  "azure_blob": {
+    "sas_url_env": "NOW_AZURE_BLOB_SAS_URL",
+    "prefix": "my-project/sub"
+  }
+}
+"#,
+        )
+        .unwrap();
+    site.child(".env")
+        .write_str(
+            r#"NOW_AZURE_BLOB_SAS_URL="https://infinitybin.blob.core.windows.net/now/now?sv=1&sig=secret"
+"#,
+        )
+        .unwrap();
+
+    now_cmd(&config_home)
+        .current_dir(site.path())
+        .env("PATH", "/definitely/missing")
+        .args(["deploy", "--dry-run"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Azure Storage Blob SAS upload"))
+        .stdout(predicate::str::contains(
+            "https://infinitybin.blob.core.windows.net/now/now/my-project/sub?<redacted>",
+        ))
+        .stdout(predicate::str::contains(
+            "Default URL: https://infinitybin.blob.core.windows.net/now/now/my-project/sub/index.html",
+        ))
+        .stdout(predicate::str::contains("secret").not())
+        .stderr(predicate::str::is_empty());
+}
+
+
+#[test]
 fn azure_storage_blob_provider_accepts_display_name_as_cli_value() {
     let site = TempDir::new().unwrap();
     let config_home = TempDir::new().unwrap();

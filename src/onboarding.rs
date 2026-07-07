@@ -43,7 +43,7 @@ pub fn run_first_run_setup<R: BufRead, W: Write>(
     match provider {
         ProviderKind::Firebase => prompt_firebase(input, output, &mut config)?,
         ProviderKind::AzureBlob => {
-            env_secret = Some(prompt_azure_blob(input, output, &mut config)?);
+            env_secret = Some(prompt_azure_blob(root, input, output, &mut config)?);
         }
         ProviderKind::AzureSwa => prompt_azure_swa(input, output, &mut config)?,
         ProviderKind::Ftp => prompt_ftp(input, output, &mut config)?,
@@ -52,8 +52,13 @@ pub fn run_first_run_setup<R: BufRead, W: Write>(
     write_json_file(&path, &config)?;
     if let Some((env_name, sas_url)) = env_secret {
         let env_path = local_env_path(root);
+        let exists = env_path.exists();
         write_env_value(&env_path, &env_name, &sas_url)?;
-        writeln!(output, "Created {}", env_path.display())?;
+        if exists {
+            writeln!(output, "Updated {}", env_path.display())?;
+        } else {
+            writeln!(output, "Created {}", env_path.display())?;
+        }
     }
     writeln!(output)?;
     writeln!(output, "Created {}", path.display())?;
@@ -128,6 +133,7 @@ fn prompt_firebase<R: BufRead, W: Write>(
 }
 
 fn prompt_azure_blob<R: BufRead, W: Write>(
+    root: &Path,
     input: &mut R,
     output: &mut W,
     config: &mut Value,
@@ -146,13 +152,36 @@ fn prompt_azure_blob<R: BufRead, W: Write>(
     )?
     .unwrap_or_else(|| DEFAULT_AZURE_BLOB_SAS_URL_ENV.to_owned());
     validate_env_name(&env_name)?;
-    let sas_url = prompt_required(input, output, "Azure Storage Blob container SAS URL", None)?;
+
+    let local_env = crate::env_file::read_local_env(root).ok();
+    let existing_sas_url = crate::env_file::env_value(&env_name, local_env.as_ref());
+
+    let sas_url = if let Some(existing) = &existing_sas_url {
+        let masked = crate::azure_blob::mask_sas_url(existing).unwrap_or_else(|_| "<invalid>".to_owned());
+        let prompt_text = format!("Azure Storage Blob container SAS URL [{masked}]: ");
+        let answer = prompt(input, output, &prompt_text)?;
+        match answer {
+            Some(answer) if !answer.trim().is_empty() => answer.trim().to_owned(),
+            _ => existing.clone(),
+        }
+    } else {
+        prompt_required(input, output, "Azure Storage Blob container SAS URL", None)?
+    };
+
     set_key(
         config,
         "azure_blob.sas_url_env",
         Value::String(env_name.clone()),
     )?;
     remove_key(config, "azure_blob.sas_url");
+
+    let prefix = prompt_optional(
+        input,
+        output,
+        "Azure Storage Blob folder prefix",
+        get_string(config, "azure_blob.prefix").as_deref(),
+    )?;
+    set_optional_string(config, "azure_blob.prefix", prefix)?;
 
     Ok((env_name, sas_url))
 }
@@ -382,7 +411,7 @@ mod tests {
     #[test]
     fn first_run_setup_writes_azure_blob_sas_url_to_env_file() {
         let temp = TempDir::new().unwrap();
-        let answers = b"2\n\nhttps://acct.blob.core.windows.net/$web?sv=1&sig=secret\n";
+        let answers = b"2\n\nhttps://acct.blob.core.windows.net/$web?sv=1&sig=secret\nmy-prefix\n";
         let mut input = Cursor::new(answers.as_slice());
         let mut output = Vec::new();
 
@@ -394,6 +423,10 @@ mod tests {
             get_key(&config, "azure_blob.sas_url_env"),
             Some(&json!("NOW_AZURE_BLOB_SAS_URL"))
         );
+        assert_eq!(
+            get_key(&config, "azure_blob.prefix"),
+            Some(&json!("my-prefix"))
+        );
         assert_eq!(get_key(&config, "azure_blob.sas_url"), None);
 
         let env_text = std::fs::read_to_string(temp.path().join(".env")).unwrap();
@@ -404,5 +437,36 @@ mod tests {
         assert!(output.contains("SAS URL"));
         assert!(output.contains(".env"));
         assert!(!output.contains("sig=secret"));
+    }
+
+    #[test]
+    fn first_run_setup_uses_existing_sas_url_from_env_file_as_default() {
+        let temp = TempDir::new().unwrap();
+        let env_path = temp.path().join(".env");
+        std::fs::write(&env_path, "NOW_AZURE_BLOB_SAS_URL=\"https://acct.blob.core.windows.net/$web?sv=1&sig=secret\"\n").unwrap();
+
+        let answers = b"2\n\n\nmy-prefix\n";
+        let mut input = Cursor::new(answers.as_slice());
+        let mut output = Vec::new();
+
+        let provider = run_first_run_setup(temp.path(), &mut input, &mut output).unwrap();
+        let config = read_json_file(&local_config_path(temp.path())).unwrap();
+
+        assert_eq!(provider, ProviderKind::AzureBlob);
+        assert_eq!(
+            get_key(&config, "azure_blob.sas_url_env"),
+            Some(&json!("NOW_AZURE_BLOB_SAS_URL"))
+        );
+        assert_eq!(
+            get_key(&config, "azure_blob.prefix"),
+            Some(&json!("my-prefix"))
+        );
+
+        let env_text = std::fs::read_to_string(&env_path).unwrap();
+        assert!(env_text.contains("NOW_AZURE_BLOB_SAS_URL="));
+        assert!(env_text.contains("sig=secret"));
+
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains("https://acct.blob.core.windows.net/$web?<redacted>"));
     }
 }

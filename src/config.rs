@@ -115,6 +115,7 @@ pub struct AzureBlobConfig {
     pub destination_path: Option<String>,
     pub overwrite: Option<bool>,
     pub base_url: Option<String>,
+    pub prefix: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -161,7 +162,8 @@ pub fn default_config() -> Value {
             "site": null
         },
         "azure_blob": {
-            "sas_url_env": DEFAULT_AZURE_BLOB_SAS_URL_ENV
+            "sas_url_env": DEFAULT_AZURE_BLOB_SAS_URL_ENV,
+            "prefix": null
         },
         "azure_swa": {
             "environment": "production",
