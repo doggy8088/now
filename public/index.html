@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>now｜一行命令部署靜態網站</title>
+<meta name="description" content="now 是一支 Rust CLI，把靜態網站交給 Firebase、Azure 與 FTP 的既有 CLI 部署。選好目錄、組好命令、輸出預設 URL，部署從多步驟變成單一步驟。">
+<meta name="theme-color" content="#1a1410">
+<meta property="og:title" content="now｜一行命令部署靜態網站">
+<meta property="og:description" content="把靜態網站交給既有 provider CLI 部署。一行命令，然後完成。">
+<meta property="og:type" content="website">
+<link rel="icon" href="favicon.svg">
+<link rel="alternate" hreflang="zh-TW" href="index.html">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@300;400;500;700&family=Noto+Serif+TC:wght@600;700&family=Schibsted+Grotesk:opsz,wght@10..72,400;10..72,500;10..72,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#top">now<span class="dot">.</span><small>一行命令部署靜態網站</small></a>
+    <nav class="nav-links" aria-label="主要導覽">
+      <a href="#why">為什麼</a>
+      <a href="#providers">支援平台</a>
+      <a href="#flow">流程</a>
+      <a href="#config">設定</a>
+      <a href="#install">安裝</a>
+      <a class="gh" href="https://github.com/doggy8088/now" rel="noopener">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ============ HERO ============ -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="hero-atm" aria-hidden="true">
+      <picture>
+        <source type="image/webp" srcset="assets/hero.webp">
+        <img src="assets/hero.jpg" alt="" loading="eager" decoding="async">
+      </picture>
+    </div>
+    <div class="wrap hero-grid">
+      <div class="reveal stagger" style="--i:0">
+        <span class="eyebrow">Rust CLI · v0.1</span>
+        <h1 id="hero-title" class="hero-headline">一行命令，<br>把靜態網站<em>交給雲端</em>。</h1>
+        <p class="lede"><code>now</code> 是一支 Rust CLI，整合 Firebase、Azure 與 FTP 的既有部署 CLI。選好可發布目錄、組好 provider 命令、部署後輸出預設 URL；部署從多步驟，變成單一步驟。</p>
+        <div class="hero-cta">
+          <a class="btn btn--primary" href="#install">開始使用 <span class="arrow">→</span></a>
+          <span class="cmd"><span class="prompt">$</span> npm install -g @willh/now<button class="copy" data-copy="npm install -g @willh/now" aria-label="複製命令">複製</button></span>
+        </div>
+        <div class="hero-meta">
+          <span>macOS Apple / Intel</span>
+          <span>Linux x64</span>
+          <span>Windows x64</span>
+          <span>SHA-256 驗證</span>
+        </div>
+      </div>
+
+      <div class="reveal" style="--i:1; transition-delay:.12s">
+        <div class="term" aria-label="now deploy 示範輸出">
+          <div class="term-bar"><i></i><i></i><i></i><span>~/my-site · zsh</span></div>
+<pre><span class="dim"># 在專案根目錄直接執行</span>
+<span class="p">$</span> now deploy dist
+
+<span class="dim">→ resolving source…</span>        <span class="ok">✓ dist/</span>
+<span class="dim">→ reading .now.json…</span>      <span class="ok">✓ firebase</span>
+<span class="dim">→ building command…</span>       <span class="ok">✓</span>
+  <span class="p">firebase</span> deploy --only hosting
+
+<span class="ok">✔ Deployed!</span>
+<span class="url">https://my-project.web.app</span><span class="caret">▌</span></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ WHY ============ -->
+  <section id="why" aria-labelledby="why-title">
+    <div class="wrap">
+      <span class="eyebrow reveal">為什麼是 now</span>
+      <h2 id="why-title" class="reveal" style="margin-top:1rem">不重寫雲端，<br>只把部署流程收攏成一步。</h2>
+      <div class="three">
+        <div class="item reveal" style="--i:0">
+          <h3>不重新實作雲端協定</h3>
+          <p>初版重點是包裝與協調，不是重寫 Firebase、Azure 或 FTP 的部署邏輯。實際部署交給各 provider 已有的 CLI，你既有的登入狀態與權限都直接沿用。</p>
+        </div>
+        <div class="item reveal" style="--i:1">
+          <h3>一致的命令，四個平台</h3>
+          <p>無論背後是 Firebase Hosting、Azure Blob、Azure Static Web Apps 或 FTP，對你都是同一支 <code>now</code>。換 provider 換設定，不換肌肉記憶。</p>
+        </div>
+        <div class="item reveal" style="--i:2">
+          <h3>設定只存非祕密</h3>
+          <p><code>.now.json</code> 只保存 provider、來源、base_url 這類非機密設定。token、密碼、account key 一律走環境變數或既有 CLI 登入，不進設定檔、不進 repo。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ PROVIDERS ============ -->
+  <section id="providers" class="providers texture-band" aria-labelledby="prov-title">
+    <div class="wrap">
+      <span class="eyebrow reveal">支援平台</span>
+      <h2 id="prov-title" class="reveal" style="margin-top:1rem">四個 provider，<br>各自交給各自的 CLI。</h2>
+      <p class="lede reveal" style="margin-top:1.2rem"><code>now</code> 負責選目錄與組命令，實際部署由下列 provider CLI 執行。先裝好對應 CLI、完成登入，<code>now</code> 就能接手。</p>
+      <div class="prov-list">
+        <div class="prov reveal" style="--i:0">
+          <div class="prov-head"><h3>Firebase Hosting</h3><span class="tag">firebase</span></div>
+          <div class="cmdline">firebase deploy --only hosting</div>
+          <p>沿用 <code>firebase login</code> 的既有登入狀態。設定 <code>firebase.site</code> 時改用 <code>hosting:&lt;site&gt;</code>。</p>
+        </div>
+        <div class="prov reveal" style="--i:1">
+          <div class="prov-head"><h3>Azure Blob</h3><span class="tag">azure-blob</span></div>
+          <div class="cmdline">az storage blob upload-batch --source &lt;src&gt; --destination '$web' --auth-mode login</div>
+          <p>Static website 通常用 <code>$web</code> container，搭配 <code>az login</code> 與 <code>--auth-mode login</code>。</p>
+        </div>
+        <div class="prov reveal" style="--i:2">
+          <div class="prov-head"><h3>Azure Static Web Apps</h3><span class="tag">azure-swa</span></div>
+          <div class="cmdline">swa deploy &lt;source&gt; --env production</div>
+          <p>deployment token 走環境變數 <code>SWA_CLI_DEPLOYMENT_TOKEN</code>，不寫進設定檔。</p>
+        </div>
+        <div class="prov reveal" style="--i:3">
+          <div class="prov-head"><h3>FTP</h3><span class="tag">ftp</span></div>
+          <div class="cmdline">lftp mirror -R --only-newer</div>
+          <p>帳號密碼用 <code>NOW_FTP_USERNAME</code> / <code>NOW_FTP_PASSWORD</code> 環境變數。初版只上傳同步，不做遠端刪除。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ FLOW ============ -->
+  <section id="flow" aria-labelledby="flow-title">
+    <div class="wrap">
+      <span class="eyebrow reveal">三步完成</span>
+      <h2 id="flow-title" class="reveal" style="margin-top:1rem">設定、選擇、部署，<br>然後完成。</h2>
+      <div class="steps">
+        <div class="step reveal" style="--i:0">
+          <div class="n">1</div>
+          <div class="body">
+            <h3>建立本機設定</h3>
+            <p>在專案根目錄初始化 <code>.now.json</code>，只存非祕密設定。</p>
+            <div class="cmdline">$ now config init</div>
+          </div>
+        </div>
+        <div class="step reveal" style="--i:1">
+          <div class="n">2</div>
+          <div class="body">
+            <h3>選擇 provider 並填入設定</h3>
+            <p>指定 provider 與對應的 project、account 或 host 等非機密欄位。</p>
+            <div class="cmdline">$ now config set provider firebase<br>$ now config set firebase.project my-project</div>
+          </div>
+        </div>
+        <div class="step reveal" style="--i:2">
+          <div class="n">3</div>
+          <div class="body">
+            <h3>部署並拿到 URL</h3>
+            <p><code>now [path]</code> 等同 <code>now deploy [path]</code>。部署完成後依序挑出預設 URL 並輸出。</p>
+            <div class="cmdline">$ now deploy dist<br>→ https://my-project.web.app</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ CONFIG ============ -->
+  <section id="config" aria-labelledby="config-title">
+    <div class="wrap">
+      <span class="eyebrow reveal">設定檔</span>
+      <h2 id="config-title" class="reveal" style="margin-top:1rem">兩份設定檔，<br>一份本機、一份全域。</h2>
+      <div class="code-grid">
+        <div class="reveal" style="--i:0">
+          <pre class="code"><span class="c">// .now.json · 本機設定，只存非祕密</span>
+{
+  <span class="p">"provider"</span>: <span class="s">"firebase"</span>,
+  <span class="p">"source"</span>: null,
+  <span class="p">"base_url"</span>: <span class="s">"https://example.web.app"</span>,
+  <span class="p">"default_url"</span>: null,
+  <span class="p">"firebase"</span>: {
+    <span class="p">"project"</span>: <span class="s">"my-firebase-project"</span>,
+    <span class="p">"site"</span>: null
+  },
+  <span class="p">"azure_blob"</span>: { <span class="p">"account"</span>: <span class="s">"mystorageaccount"</span>, <span class="p">"container"</span>: <span class="s">"$web"</span> },
+  <span class="p">"azure_swa"</span>:  { <span class="p">"environment"</span>: <span class="s">"production"</span> },
+  <span class="p">"ftp"</span>:       { <span class="p">"host"</span>: <span class="s">"ftp.example.com"</span>, <span class="p">"remote_dir"</span>: <span class="s">"/public_html"</span> }
+}</pre>
+        </div>
+        <div class="note reveal" style="--i:1">
+          <h3>合併優先序</h3>
+          <p>CLI flags &gt; <code>.now.json</code> &gt; <code>~/.config/now/settings.json</code>。本機設定覆寫全域，命令列 flag 覆寫一切。</p>
+          <h3 style="margin-top:1.5rem">安全性</h3>
+          <p>token、password、secret、account key 一律不寫進設定檔。Firebase 用 <code>firebase login</code>、Azure 用 <code>az login</code>、SWA 用環境變數、FTP 用環境變數。<code>now config set</code> 也會擋下明顯像祕密的 key。</p>
+          <div class="cmdline" style="margin-top:1rem">$ now config doctor  <span class="muted" style="margin-left:.6rem"># 檢查設定與 provider CLI</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ INSTALL ============ -->
+  <section id="install" aria-labelledby="install-title">
+    <div class="wrap">
+      <span class="eyebrow reveal">安裝</span>
+      <h2 id="install-title" class="reveal" style="margin-top:1rem">三種方式，<br>挑一個順手的。</h2>
+      <div class="install-tabs reveal" role="tablist" aria-label="安裝方式">
+        <button class="tab" role="tab" aria-selected="true" data-tab="npm">npm</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="unix">Unix (curl)</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="win">Windows</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="manual">手動下載</button>
+      </div>
+
+      <div class="install-panel active" data-panel="npm">
+        <div class="cmd"><span class="prompt">$</span> npm install -g @willh/now<button class="copy" data-copy="npm install -g @willh/now">複製</button></div>
+        <p class="muted" style="margin-top:.8rem">npm 套件只含 JavaScript wrapper 與安裝邏輯。安裝時自動從 GitHub Release 下載對應平台原生 binary，並驗證 SHA-256。</p>
+      </div>
+      <div class="install-panel" data-panel="unix">
+        <div class="cmd"><span class="prompt">$</span> curl -fsSL https://raw.githubusercontent.com/doggy8088/now/main/install.sh | sh<button class="copy" data-copy="curl -fsSL https://raw.githubusercontent.com/doggy8088/now/main/install.sh | sh">複製</button></div>
+        <p class="muted" style="margin-top:.8rem">預設安裝到 <code>$HOME/.local/bin</code>。可用 <code>NOW_INSTALL_DIR=/usr/local/bin</code> 覆寫。</p>
+      </div>
+      <div class="install-panel" data-panel="win">
+        <div class="cmd"><span class="prompt">PS&gt;</span> iwr https://raw.githubusercontent.com/doggy8088/now/main/install.ps1 -OutFile install.ps1; .\install.ps1<button class="copy" data-copy="iwr https://raw.githubusercontent.com/doggy8088/now/main/install.ps1 -OutFile install.ps1; .\install.ps1">複製</button></div>
+        <p class="muted" style="margin-top:.8rem">預設安裝到 <code>$env:LOCALAPPDATA\now\bin</code>。可用 <code>-InstallDir</code> 覆寫。</p>
+      </div>
+      <div class="install-panel" data-panel="manual">
+        <div class="cmd"><span class="prompt">→</span> https://github.com/doggy8088/now/releases/latest<button class="copy" data-copy="https://github.com/doggy8088/now/releases/latest">複製</button></div>
+        <p class="muted" style="margin-top:.8rem">下載對應平台 archive 與同名 <code>.sha256</code>，驗證 checksum 後解壓縮，把 <code>now</code> 或 <code>now.exe</code> 放進 PATH 內目錄。</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ CTA ============ -->
+  <section aria-labelledby="cta-title">
+    <div class="wrap" style="text-align:center">
+      <h2 id="cta-title" class="reveal">準備好了嗎？</h2>
+      <p class="lede reveal" style="margin:1.4rem auto 2.2rem">建置好靜態資產，一行命令把它交給雲端。</p>
+      <div class="hero-cta reveal" style="justify-content:center">
+        <a class="btn btn--primary" href="https://github.com/doggy8088/now" rel="noopener">查看 GitHub <span class="arrow">→</span></a>
+        <a class="btn btn--ghost" href="#install">安裝 now</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href="#top">now<span class="dot">.</span></a>
+        <p style="margin-top:1rem">一支 Rust CLI，把靜態網站交給既有 provider CLI 部署。不重寫雲端協定，只把流程收攏成一步。</p>
+      </div>
+      <div>
+        <h4>資源</h4>
+        <ul>
+          <li><a href="https://github.com/doggy8088/now" rel="noopener">GitHub 儲存庫</a></li>
+          <li><a href="https://github.com/doggy8088/now/releases/latest" rel="noopener">最新 Release</a></li>
+          <li><a href="https://www.npmjs.com/package/@willh/now" rel="noopener">npm 套件</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>導覽</h4>
+        <ul>
+          <li><a href="#why">為什麼</a></li>
+          <li><a href="#providers">支援平台</a></li>
+          <li><a href="#flow">流程</a></li>
+          <li><a href="#config">設定</a></li>
+          <li><a href="#install">安裝</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>MIT License · © doggy8088/now</span>
+      <span>以 Rust 打造，在午後陽光裡部署。</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  // reveal on intersect
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var els = document.querySelectorAll(".reveal");
+  if (reduce || !("IntersectionObserver" in window)) {
+    els.forEach(function (e) { e.classList.add("in"); });
+  } else {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); }
+      });
+    }, { threshold: 0.12, rootMargin: "0px 0px -8% 0px" });
+    els.forEach(function (e) { io.observe(e); });
+  }
+
+  // install tabs
+  var tabs = document.querySelectorAll(".tab");
+  tabs.forEach(function (t) {
+    t.addEventListener("click", function () {
+      var key = t.getAttribute("data-tab");
+      tabs.forEach(function (x) {
+        var on = x === t;
+        x.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      document.querySelectorAll(".install-panel").forEach(function (p) {
+        p.classList.toggle("active", p.getAttribute("data-panel") === key);
+      });
+    });
+  });
+
+  // copy buttons
+  document.querySelectorAll(".copy").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var text = b.getAttribute("data-copy") || "";
+      var done = function () { var o = b.textContent; b.textContent = "已複製"; setTimeout(function(){ b.textContent = o; }, 1400); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, done);
+      } else { done(); }
+    });
+  });
+})();
+</script>
+
+</body>
+</html>
