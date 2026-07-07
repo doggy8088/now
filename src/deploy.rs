@@ -1,5 +1,6 @@
 use crate::azure_blob::{display_upload_command, upload_directory};
 use crate::config::{NowConfig, ProviderKind, merged_config_value, parse_config};
+use crate::env_file::{EnvFile, read_local_env};
 use crate::fs_rules::is_excluded_path;
 use crate::onboarding::run_first_run_setup;
 use crate::provider::{build_provider_command, program_available, provider_install_hint};
@@ -69,6 +70,11 @@ pub fn execute_deploy(request: DeployRequest) -> Result<()> {
         }
     };
 
+    let local_env = if provider == ProviderKind::AzureBlob {
+        Some(read_local_env(&request.cwd)?)
+    } else {
+        None
+    };
     let mut selection = select_source(
         &request.cwd,
         request.path.as_deref(),
@@ -91,10 +97,10 @@ pub fn execute_deploy(request: DeployRequest) -> Result<()> {
     }
 
     let prepared = prepare_source(&selection)?;
-    let default_url = choose_default_url(&config, provider, &prepared.path);
+    let default_url = choose_default_url(&config, provider, local_env.as_ref(), &prepared.path);
 
     if provider == ProviderKind::AzureBlob {
-        let command = display_upload_command(&config, &prepared.path)?;
+        let command = display_upload_command(&config, local_env.as_ref(), &prepared.path)?;
         if request.dry_run {
             print_deploy_summary(
                 &selection,
@@ -108,7 +114,7 @@ pub fn execute_deploy(request: DeployRequest) -> Result<()> {
             return Ok(());
         }
 
-        let upload_summary = upload_directory(&config, &prepared.path)?;
+        let upload_summary = upload_directory(&config, local_env.as_ref(), &prepared.path)?;
         print_deploy_summary(
             &selection,
             &prepared.path,
@@ -267,6 +273,7 @@ pub fn prepare_source(selection: &SourceSelection) -> Result<PreparedSource> {
 pub fn choose_default_url(
     config: &NowConfig,
     provider: ProviderKind,
+    env_file: Option<&EnvFile>,
     source: &Path,
 ) -> Option<String> {
     if let Some(default_url) = config
@@ -284,6 +291,7 @@ pub fn choose_default_url(
             return Some(default_url_for_file(
                 config,
                 provider,
+                env_file,
                 base_url,
                 Path::new(file_name),
             ));
@@ -312,6 +320,7 @@ pub fn choose_default_url(
             return Some(default_url_for_file(
                 config,
                 provider,
+                env_file,
                 base_url,
                 Path::new(&html_files[0]),
             ));
@@ -320,12 +329,13 @@ pub fn choose_default_url(
 
     base_url
         .map(str::to_owned)
-        .or_else(|| inferred_provider_base_url(config, provider))
+        .or_else(|| inferred_provider_base_url(config, provider, env_file))
 }
 
 fn default_url_for_file(
     config: &NowConfig,
     provider: ProviderKind,
+    env_file: Option<&EnvFile>,
     base_url: Option<&str>,
     relative_path: &Path,
 ) -> String {
@@ -335,16 +345,20 @@ fn default_url_for_file(
 
     match provider {
         ProviderKind::AzureBlob => {
-            crate::azure_blob::public_blob_url_for_relative_path(config, relative_path)
+            crate::azure_blob::public_blob_url_for_relative_path(config, env_file, relative_path)
                 .unwrap_or_else(|| relative_path.to_string_lossy().into_owned())
         }
         _ => relative_path.to_string_lossy().into_owned(),
     }
 }
 
-fn inferred_provider_base_url(config: &NowConfig, provider: ProviderKind) -> Option<String> {
+fn inferred_provider_base_url(
+    config: &NowConfig,
+    provider: ProviderKind,
+    env_file: Option<&EnvFile>,
+) -> Option<String> {
     match provider {
-        ProviderKind::AzureBlob => crate::azure_blob::public_base_url(config),
+        ProviderKind::AzureBlob => crate::azure_blob::public_base_url(config, env_file),
         _ => None,
     }
 }
@@ -543,7 +557,7 @@ mod tests {
             ..NowConfig::default()
         };
         assert_eq!(
-            choose_default_url(&config, ProviderKind::Firebase, temp.path()).as_deref(),
+            choose_default_url(&config, ProviderKind::Firebase, None, temp.path()).as_deref(),
             Some("https://example.com/site/index.html")
         );
 
@@ -552,7 +566,7 @@ mod tests {
             ..config
         };
         assert_eq!(
-            choose_default_url(&config, ProviderKind::Firebase, temp.path()).as_deref(),
+            choose_default_url(&config, ProviderKind::Firebase, None, temp.path()).as_deref(),
             Some("https://example.com/custom")
         );
     }
@@ -562,18 +576,26 @@ mod tests {
         let temp = TempDir::new().unwrap();
         temp.child("index.html").write_str("ok").unwrap();
 
+        let env_file = EnvFile::from_pairs(&[(
+            "NOW_AZURE_BLOB_SAS_URL",
+            "https://infinitybin.blob.core.windows.net/now/now?sv=1&sig=secret",
+        )]);
         let config = NowConfig {
             azure_blob: crate::config::AzureBlobConfig {
-                sas_url: Some(
-                    "https://infinitybin.blob.core.windows.net/now/now?sv=1&sig=secret".to_owned(),
-                ),
+                sas_url_env: Some("NOW_AZURE_BLOB_SAS_URL".to_owned()),
                 ..Default::default()
             },
             ..NowConfig::default()
         };
 
         assert_eq!(
-            choose_default_url(&config, ProviderKind::AzureBlob, temp.path()).as_deref(),
+            choose_default_url(
+                &config,
+                ProviderKind::AzureBlob,
+                Some(&env_file),
+                temp.path()
+            )
+            .as_deref(),
             Some("https://infinitybin.blob.core.windows.net/now/now/index.html")
         );
     }

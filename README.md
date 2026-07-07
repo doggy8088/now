@@ -101,7 +101,7 @@ now 讀取兩種設定檔：
 2. `.now.json`
 3. `~/.config/now/settings.json`
 
-**設定檔通常只保存非祕密設定。`azure_blob.sas_url` 例外，SAS URL 含有上傳權杖，若寫入 `.now.json` 必須保護該檔案。**
+**設定檔只保存非祕密設定。Azure Storage Blob 的 SAS URL 含有上傳權杖，不寫入 `.now.json`；`.now.json` 只保存 `azure_blob.sas_url_env`。**
 
 完整範例：
 
@@ -116,7 +116,7 @@ now 讀取兩種設定檔：
     "site": null
   },
   "azure_blob": {
-    "sas_url": "https://mystorageaccount.blob.core.windows.net/$web?sv=..."
+    "sas_url_env": "NOW_AZURE_BLOB_SAS_URL"
   },
   "azure_swa": {
     "app_name": null,
@@ -177,15 +177,32 @@ firebase deploy --only hosting
 
 ### Azure Storage Blob
 
-Azure Storage Blob provider 不需要 Azure CLI。只要提供 container SAS URL，now 會直接使用 Azure Blob REST API 上傳檔案。
+Azure Storage Blob provider 不需要 Azure CLI。只要透過環境變數提供 container SAS URL，now 會直接使用 Azure Blob REST API 上傳檔案。
 
-首次設定選擇 `Azure Storage Blob` 時，只會要求輸入 SAS URL。
+首次設定選擇 `Azure Storage Blob` 時，會要求輸入 SAS URL，但只會把 SAS URL 寫入 `.env`，`.now.json` 只保存環境變數名稱。
 
 建議設定：
 
 ```sh
 now config set provider azure-storage-blob
 now config set azure_blob.sas_url 'https://mystorageaccount.blob.core.windows.net/$web?sv=...'
+```
+
+上述 `azure_blob.sas_url` 是便利設定入口：now 會自動把實際 SAS URL 寫入 `.env` 的 `NOW_AZURE_BLOB_SAS_URL`，並在 `.now.json` 寫入：
+
+```json
+{
+  "azure_blob": {
+    "sas_url_env": "NOW_AZURE_BLOB_SAS_URL"
+  }
+}
+```
+
+若要自行管理環境變數，也可以直接設定：
+
+```sh
+export NOW_AZURE_BLOB_SAS_URL='https://mystorageaccount.blob.core.windows.net/$web?sv=...'
+now config set azure_blob.sas_url_env NOW_AZURE_BLOB_SAS_URL
 ```
 
 為了相容舊設定，`azure-blob` 仍可被讀取；新設定建議使用 `azure-storage-blob`。
@@ -196,7 +213,7 @@ SAS URL 必須指向 container，例如 Azure Static Website 常用的 `$web` co
 PUT https://mystorageaccount.blob.core.windows.net/$web/<file>?<sas-query>
 ```
 
-若未設定 `base_url` 與 `default_url`，now 會從 SAS URL 移除 query string，再加上預設頁面檔名來推導 `Default URL`。
+若未設定 `base_url` 與 `default_url`，now 會從 `sas_url_env` 指向的 SAS URL 移除 query string，再加上預設頁面檔名來推導 `Default URL`。
 
 ### Azure Static Web App
 
@@ -280,7 +297,7 @@ now ./public
 4. 根目錄唯一的 `.html` 或 `.htm` 頁面，搭配 `base_url` 或 provider 可推導的公開 URL
 5. provider base URL 或 provider 可推導的公開 URL
 
-畫面會以 `Default URL: <url>` 顯示判斷結果。若 `base_url` 與 `default_url` 都是 `null`，now 會盡量從 provider 設定推導完整 URL；目前 Azure Storage Blob 會從 SAS URL 推導。若無法推導，檔案規則會輸出相對頁面名稱，例如 `index.html`。
+畫面會以 `Default URL: <url>` 顯示判斷結果。若 `base_url` 與 `default_url` 都是 `null`，now 會盡量從 provider 設定推導完整 URL；目前 Azure Storage Blob 會從 `sas_url_env` 指向的 SAS URL 推導。若無法推導，檔案規則會輸出相對頁面名稱，例如 `index.html`。
 
 * * *
 
@@ -302,18 +319,18 @@ now config doctor
 
 ## 安全性
 
-**不要把 token、password、secret 或 account key 寫入 `.now.json`。Azure Storage Blob 的 SAS URL 具有上傳權限，若寫入 `.now.json`，必須把它視為祕密。**
+**不要把 token、password、secret、account key 或 Azure Storage Blob SAS URL 寫入 `.now.json`。**
 
 建議做法：
 
 | 類型 | 建議 |
 | --- | --- |
 | Firebase Hosting | 使用 `firebase login` 的既有登入狀態 |
-| Azure Storage Blob | 使用短效期、最小權限的 container SAS URL |
+| Azure Storage Blob | 使用短效期、最小權限的 container SAS URL，並透過 `sas_url_env` 指向環境變數或 `.env` |
 | Azure Static Web App | 使用 `SWA_CLI_DEPLOYMENT_TOKEN` 或自訂 token 環境變數 |
 | Any Website (FTP) | 使用 `NOW_FTP_USERNAME` 與 `NOW_FTP_PASSWORD` 環境變數 |
 
-`now config set` 會拒絕明顯像祕密的 key，但仍應避免把敏感值放進 repository。
+`now config set` 會拒絕明顯像祕密的 key。`now config set azure_blob.sas_url <url>` 只作為安全便利入口，會把實際 URL 寫入已被 `.gitignore` 排除的 `.env`，不會寫入 `.now.json`。
 
 * * *
 

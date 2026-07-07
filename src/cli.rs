@@ -1,10 +1,11 @@
 use crate::azure_blob::display_upload_command;
 use crate::config::{
-    ProviderKind, default_config, get_key, global_config_path, local_config_path,
-    merged_config_value, parse_config, parse_config_value, read_json_file, secret_paths, set_key,
-    write_json_file,
+    DEFAULT_AZURE_BLOB_SAS_URL_ENV, ProviderKind, default_config, get_key, global_config_path,
+    local_config_path, merged_config_value, parse_config, parse_config_value, read_json_file,
+    remove_key, secret_paths, set_key, write_json_file,
 };
 use crate::deploy::{DeployRequest, execute_deploy};
+use crate::env_file::{local_env_path, read_local_env, write_env_value};
 use crate::provider::{build_provider_command, program_available, provider_install_hint};
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
@@ -185,11 +186,53 @@ fn set_config(
     key: &str,
     raw_value: &str,
 ) -> Result<()> {
+    if key == "azure_blob.sas_url" {
+        return set_azure_blob_sas_url(scope, cwd, raw_value);
+    }
+
     let path = config_path(scope, cwd)?;
     let mut value = read_json_file(&path)?;
     set_key(&mut value, key, parse_config_value(raw_value))?;
+    if key == "azure_blob.sas_url_env" {
+        remove_key(&mut value, "azure_blob.sas_url");
+    }
     write_json_file(&path, &value)?;
     println!("Updated {}", path.display());
+    Ok(())
+}
+
+fn set_azure_blob_sas_url(
+    scope: ConfigWriteScope,
+    cwd: &std::path::Path,
+    sas_url: &str,
+) -> Result<()> {
+    if scope == ConfigWriteScope::Global {
+        bail!(
+            "azure_blob.sas_url is secret-like; set azure_blob.sas_url_env globally and provide the SAS URL through an environment variable"
+        );
+    }
+
+    let config_path = config_path(scope, cwd)?;
+    let mut value = read_json_file(&config_path)?;
+    let env_name = get_key(&value, "azure_blob.sas_url_env")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(DEFAULT_AZURE_BLOB_SAS_URL_ENV)
+        .to_owned();
+
+    set_key(
+        &mut value,
+        "azure_blob.sas_url_env",
+        Value::String(env_name.clone()),
+    )?;
+    remove_key(&mut value, "azure_blob.sas_url");
+    write_json_file(&config_path, &value)?;
+
+    let env_path = local_env_path(cwd);
+    write_env_value(&env_path, &env_name, sas_url)?;
+    println!("Updated {}", config_path.display());
+    println!("Updated {}", env_path.display());
     Ok(())
 }
 
@@ -230,7 +273,8 @@ fn doctor_config(cwd: &std::path::Path) -> Result<()> {
         Some(provider) => {
             println!("Provider: {provider}");
             if provider == ProviderKind::AzureBlob {
-                match display_upload_command(&config, cwd) {
+                let local_env = read_local_env(cwd)?;
+                match display_upload_command(&config, Some(&local_env), cwd) {
                     Ok(command) => {
                         println!("Command: {command}");
                         println!("Provider CLI: not required");

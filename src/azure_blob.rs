@@ -1,4 +1,5 @@
 use crate::config::NowConfig;
+use crate::env_file::{EnvFile, env_value};
 use anyhow::{Context, Result, anyhow, bail};
 use reqwest::blocking::Client;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
@@ -13,30 +14,40 @@ pub struct AzureBlobUploadSummary {
     pub bytes: u64,
 }
 
-pub fn display_upload_command(config: &NowConfig, source: &Path) -> Result<String> {
-    let sas_url = sas_url(config)?;
+pub fn display_upload_command(
+    config: &NowConfig,
+    env_file: Option<&EnvFile>,
+    source: &Path,
+) -> Result<String> {
+    let sas_url = sas_url(config, env_file)?;
     Ok(format!(
         "Azure Storage Blob SAS upload {} -> {}",
         source.display(),
-        mask_sas_url(sas_url)?
+        mask_sas_url(&sas_url)?
     ))
 }
 
-pub fn upload_directory(config: &NowConfig, source: &Path) -> Result<AzureBlobUploadSummary> {
-    upload_directory_to_sas_url(sas_url(config)?, source)
+pub fn upload_directory(
+    config: &NowConfig,
+    env_file: Option<&EnvFile>,
+    source: &Path,
+) -> Result<AzureBlobUploadSummary> {
+    upload_directory_to_sas_url(&sas_url(config, env_file)?, source)
 }
 
 pub fn public_blob_url_for_relative_path(
     config: &NowConfig,
+    env_file: Option<&EnvFile>,
     relative_path: &Path,
 ) -> Option<String> {
-    let mut url = blob_url_for_relative_path(optional_sas_url(config)?, relative_path).ok()?;
+    let sas_url = optional_sas_url(config, env_file)?;
+    let mut url = blob_url_for_relative_path(&sas_url, relative_path).ok()?;
     url.set_query(None);
     Some(url.to_string())
 }
 
-pub fn public_base_url(config: &NowConfig) -> Option<String> {
-    let mut url = Url::parse(optional_sas_url(config)?).ok()?;
+pub fn public_base_url(config: &NowConfig, env_file: Option<&EnvFile>) -> Option<String> {
+    let mut url = Url::parse(&optional_sas_url(config, env_file)?).ok()?;
     url.set_query(None);
     Some(url.to_string())
 }
@@ -75,19 +86,19 @@ pub fn upload_directory_to_sas_url(sas_url: &str, source: &Path) -> Result<Azure
 }
 
 pub fn blob_url_for_relative_path(sas_url: &str, relative_path: &Path) -> Result<Url> {
-    let mut url = Url::parse(sas_url).context("azure_blob.sas_url must be a valid URL")?;
+    let mut url = Url::parse(sas_url).context("Azure Storage Blob SAS URL must be a valid URL")?;
     let has_container_path = url
         .path_segments()
         .map(|mut segments| segments.any(|segment| !segment.is_empty()))
         .unwrap_or(false);
     if !has_container_path {
-        bail!("azure_blob.sas_url must include a container path");
+        bail!("Azure Storage Blob SAS URL must include a container path");
     }
 
     {
         let mut segments = url
             .path_segments_mut()
-            .map_err(|_| anyhow!("azure_blob.sas_url cannot be used as a blob base URL"))?;
+            .map_err(|_| anyhow!("Azure Storage Blob SAS URL cannot be used as a blob base URL"))?;
         segments.pop_if_empty();
         for component in relative_path.components() {
             match component {
@@ -107,7 +118,7 @@ pub fn blob_url_for_relative_path(sas_url: &str, relative_path: &Path) -> Result
 }
 
 pub fn mask_sas_url(sas_url: &str) -> Result<String> {
-    let mut url = Url::parse(sas_url).context("azure_blob.sas_url must be a valid URL")?;
+    let mut url = Url::parse(sas_url).context("Azure Storage Blob SAS URL must be a valid URL")?;
     if url.query().is_some() {
         url.set_query(None);
         Ok(format!("{}?<redacted>", url.as_str()))
@@ -140,18 +151,25 @@ fn put_blob(client: &Client, url: Url, body: &[u8], content_type: &'static str) 
     Ok(())
 }
 
-fn sas_url(config: &NowConfig) -> Result<&str> {
-    optional_sas_url(config)
-        .context("azure_blob.sas_url is required for provider Azure Storage Blob")
+fn sas_url(config: &NowConfig, env_file: Option<&EnvFile>) -> Result<String> {
+    let env_name = sas_url_env_name(config);
+    optional_sas_url(config, env_file).with_context(|| {
+        format!("environment variable {env_name} is required for azure_blob.sas_url_env")
+    })
 }
 
-fn optional_sas_url(config: &NowConfig) -> Option<&str> {
+fn optional_sas_url(config: &NowConfig, env_file: Option<&EnvFile>) -> Option<String> {
+    env_value(sas_url_env_name(config), env_file)
+}
+
+fn sas_url_env_name(config: &NowConfig) -> &str {
     config
         .azure_blob
-        .sas_url
+        .sas_url_env
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
+        .unwrap_or(crate::config::DEFAULT_AZURE_BLOB_SAS_URL_ENV)
 }
 
 fn content_type_for_path(path: &Path) -> &'static str {
@@ -213,22 +231,25 @@ mod tests {
 
     #[test]
     fn builds_public_blob_urls_without_sas_query() {
+        let env_file = EnvFile::from_pairs(&[(
+            "NOW_AZURE_BLOB_SAS_URL",
+            "https://infinitybin.blob.core.windows.net/now/now?sv=1&sig=secret",
+        )]);
         let config = NowConfig {
             azure_blob: crate::config::AzureBlobConfig {
-                sas_url: Some(
-                    "https://infinitybin.blob.core.windows.net/now/now?sv=1&sig=secret".to_owned(),
-                ),
+                sas_url_env: Some("NOW_AZURE_BLOB_SAS_URL".to_owned()),
                 ..Default::default()
             },
             ..NowConfig::default()
         };
 
         assert_eq!(
-            public_blob_url_for_relative_path(&config, Path::new("index.html")).as_deref(),
+            public_blob_url_for_relative_path(&config, Some(&env_file), Path::new("index.html"))
+                .as_deref(),
             Some("https://infinitybin.blob.core.windows.net/now/now/index.html")
         );
         assert_eq!(
-            public_base_url(&config).as_deref(),
+            public_base_url(&config, Some(&env_file)).as_deref(),
             Some("https://infinitybin.blob.core.windows.net/now/now")
         );
     }

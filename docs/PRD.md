@@ -96,7 +96,7 @@ now config doctor
 4. 根目錄唯一的 `.html` 或 `.htm` 頁面，搭配 `base_url` 或 provider 可推導的公開 URL
 5. provider base URL 或 provider 可推導的公開 URL
 
-畫面必須以 `Default URL: <url>` 顯示判斷結果。若 `base_url` 與 `default_url` 都是 `null`，工具必須盡量從 provider 設定推導完整 URL；目前 Azure Storage Blob 必須從 SAS URL 推導並移除 SAS query string。若無法推導，可輸出相對檔名。
+畫面必須以 `Default URL: <url>` 顯示判斷結果。若 `base_url` 與 `default_url` 都是 `null`，工具必須盡量從 provider 設定推導完整 URL；目前 Azure Storage Blob 必須從 `sas_url_env` 指向的 SAS URL 推導並移除 SAS query string。若無法推導，可輸出相對檔名。
 
 * * *
 
@@ -115,7 +115,7 @@ now config doctor
 2. `.now.json`
 3. `~/.config/now/settings.json`
 
-**設定檔通常只保存非祕密設定。`azure_blob.sas_url` 例外，SAS URL 含有上傳權杖，若寫入 `.now.json` 必須保護該檔案。**
+**設定檔只保存非祕密設定。Azure Storage Blob 的 SAS URL 含有上傳權杖，不得寫入 `.now.json`；`.now.json` 只保存 `azure_blob.sas_url_env`。**
 
 設定範例：
 
@@ -130,7 +130,7 @@ now config doctor
     "site": null
   },
   "azure_blob": {
-    "sas_url": "https://mystorageaccount.blob.core.windows.net/$web?sv=..."
+    "sas_url_env": "NOW_AZURE_BLOB_SAS_URL"
   },
   "azure_swa": {
     "app_name": null,
@@ -180,18 +180,19 @@ now config doctor
 需求：
 
 - 不依賴 Azure CLI。
-- 使用者只需提供 container SAS URL。
+- 使用者只需透過環境變數或專案 `.env` 提供 container SAS URL。
 - 首次設定選擇 `Azure Storage Blob` 時，只能要求使用者輸入 SAS URL，不應要求 storage account、container 名稱或 Azure CLI 登入。
+- 首次設定不得把 SAS URL 寫入 `.now.json`；必須把 SAS URL 寫入專案 `.env`，並在 `.now.json` 寫入 `azure_blob.sas_url_env`。
 - SAS URL 必須具備建立或寫入 blob 的權限。
 - 部署時由 now 直接使用 Azure Blob Put Blob REST API 上傳每個檔案。
 - 每個上傳要求需使用 `x-ms-blob-type: BlockBlob`。
-- 若 `base_url` 與 `default_url` 都是 `null`，必須從 SAS URL 與預設檔案規則推導 `Default URL`，且輸出時不得包含 SAS query string。
+- 若 `base_url` 與 `default_url` 都是 `null`，必須從 `sas_url_env` 指向的 SAS URL 與預設檔案規則推導 `Default URL`，且輸出時不得包含 SAS query string。
 - 初版不自動建立 storage account、container、SAS 或 static website 設定。
 
 必要設定：
 
 - `provider`: `azure-storage-blob`
-- `azure_blob.sas_url`
+- `azure_blob.sas_url_env`
 
 相容需求：
 
@@ -449,7 +450,7 @@ README 驗收：
 - 不支援 musl Linux。
 - 不重新實作 Firebase Hosting、Azure Static Web App 或 Any Website (FTP) 的部署協定。
 - Any Website (FTP) 不做遠端刪除同步。
-- 不在設定檔保存 token、password、secret 或 account key。Azure Storage Blob SAS URL 為例外，但必須視為祕密。
+- 不在設定檔保存 token、password、secret、account key 或 Azure Storage Blob SAS URL。
 
 * * *
 

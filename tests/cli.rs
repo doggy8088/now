@@ -2,6 +2,7 @@ use assert_cmd::Command;
 use assert_fs::TempDir;
 use assert_fs::prelude::*;
 use predicates::prelude::*;
+use serde_json::Value;
 use std::env;
 
 #[cfg(unix)]
@@ -10,6 +11,7 @@ use std::os::unix::fs::PermissionsExt;
 fn now_cmd(config_home: &TempDir) -> Command {
     let mut command = Command::cargo_bin("now").unwrap();
     command.env("NOW_CONFIG_HOME", config_home.path());
+    command.env_remove("NOW_AZURE_BLOB_SAS_URL");
     command
 }
 
@@ -93,6 +95,40 @@ fn config_set_and_get_local_value() {
         .assert()
         .success()
         .stdout(predicate::str::contains("firebase-hosting"));
+}
+
+#[test]
+fn config_set_azure_blob_sas_url_writes_env_file_and_env_name() {
+    let site = TempDir::new().unwrap();
+    let config_home = TempDir::new().unwrap();
+
+    now_cmd(&config_home)
+        .current_dir(site.path())
+        .args([
+            "config",
+            "set",
+            "azure_blob.sas_url",
+            "https://acct.blob.core.windows.net/$web?sv=1&sig=secret",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(".now.json"))
+        .stdout(predicate::str::contains(".env"));
+
+    let config: Value =
+        serde_json::from_str(&std::fs::read_to_string(site.path().join(".now.json")).unwrap())
+            .unwrap();
+    assert_eq!(
+        config
+            .pointer("/azure_blob/sas_url_env")
+            .and_then(Value::as_str),
+        Some("NOW_AZURE_BLOB_SAS_URL")
+    );
+    assert!(config.pointer("/azure_blob/sas_url").is_none());
+
+    let env_text = std::fs::read_to_string(site.path().join(".env")).unwrap();
+    assert!(env_text.contains("NOW_AZURE_BLOB_SAS_URL="));
+    assert!(env_text.contains("sig=secret"));
 }
 
 #[test]
@@ -239,9 +275,15 @@ fn azure_blob_dry_run_does_not_require_azure_cli_or_print_sas_secret() {
             r#"{
   "provider": "azure-storage-blob",
   "azure_blob": {
-    "sas_url": "https://infinitybin.blob.core.windows.net/now/now?sv=1&sig=secret"
+    "sas_url_env": "NOW_AZURE_BLOB_SAS_URL"
   }
 }
+"#,
+        )
+        .unwrap();
+    site.child(".env")
+        .write_str(
+            r#"NOW_AZURE_BLOB_SAS_URL="https://infinitybin.blob.core.windows.net/now/now?sv=1&sig=secret"
 "#,
         )
         .unwrap();
@@ -269,9 +311,15 @@ fn azure_storage_blob_provider_accepts_display_name_as_cli_value() {
         .write_str(
             r#"{
   "azure_blob": {
-    "sas_url": "https://acct.blob.core.windows.net/$web?sv=1&sig=secret"
+    "sas_url_env": "NOW_AZURE_BLOB_SAS_URL"
   }
 }
+"#,
+        )
+        .unwrap();
+    site.child(".env")
+        .write_str(
+            r#"NOW_AZURE_BLOB_SAS_URL="https://acct.blob.core.windows.net/$web?sv=1&sig=secret"
 "#,
         )
         .unwrap();

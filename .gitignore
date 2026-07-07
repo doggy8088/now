@@ -6,7 +6,6 @@
 .DS_Store
 .env
 .env.*
-.now.json
 dist/
 
 # impeccable skill working cache

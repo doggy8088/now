@@ -6,6 +6,8 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+pub const DEFAULT_AZURE_BLOB_SAS_URL_ENV: &str = "NOW_AZURE_BLOB_SAS_URL";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProviderKind {
     Firebase,
@@ -107,7 +109,7 @@ pub struct FirebaseConfig {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct AzureBlobConfig {
-    pub sas_url: Option<String>,
+    pub sas_url_env: Option<String>,
     pub account: Option<String>,
     pub container: Option<String>,
     pub destination_path: Option<String>,
@@ -159,7 +161,7 @@ pub fn default_config() -> Value {
             "site": null
         },
         "azure_blob": {
-            "sas_url": null
+            "sas_url_env": DEFAULT_AZURE_BLOB_SAS_URL_ENV
         },
         "azure_swa": {
             "environment": "production",
@@ -327,10 +329,35 @@ pub fn set_key(value: &mut Value, dotted_key: &str, new_value: Value) -> Result<
     Ok(())
 }
 
+pub fn remove_key(value: &mut Value, dotted_key: &str) -> bool {
+    let mut current = value;
+    let mut parts = dotted_key.split('.').peekable();
+    while let Some(part) = parts.next() {
+        if parts.peek().is_none() {
+            return current
+                .as_object_mut()
+                .and_then(|object| object.remove(part))
+                .is_some();
+        }
+        let Some(next) = current
+            .as_object_mut()
+            .and_then(|object| object.get_mut(part))
+        else {
+            return false;
+        };
+        current = next;
+    }
+    false
+}
+
 pub fn is_secret_key(key: &str) -> bool {
     let lower = key.to_ascii_lowercase();
     if lower.ends_with("_env") || lower.ends_with(".env") || lower.ends_with("-env") {
         return false;
+    }
+
+    if lower == "azure_blob.sas_url" || lower.ends_with(".sas_url") {
+        return true;
     }
 
     lower.contains("password")
@@ -404,6 +431,15 @@ mod tests {
         let mut value = json!({});
 
         assert!(set_key(&mut value, "ftp.password", json!("plain")).is_err());
+        assert!(set_key(&mut value, "azure_blob.sas_url", json!("plain")).is_err());
+        assert!(
+            set_key(
+                &mut value,
+                "azure_blob.sas_url_env",
+                json!("NOW_AZURE_BLOB_SAS_URL")
+            )
+            .is_ok()
+        );
         assert!(set_key(&mut value, "ftp.password_env", json!("NOW_FTP_PASSWORD")).is_ok());
         assert!(
             set_key(

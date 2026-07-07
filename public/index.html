@@ -215,7 +215,7 @@
     <span class="p">"project"</span>: <span class="s">"my-firebase-project"</span>,
     <span class="p">"site"</span>: null
   },
-  <span class="p">"azure_blob"</span>: { <span class="p">"account"</span>: <span class="s">"mystorageaccount"</span>, <span class="p">"container"</span>: <span class="s">"$web"</span> },
+  <span class="p">"azure_blob"</span>: { <span class="p">"sas_url_env"</span>: <span class="s">"NOW_AZURE_BLOB_SAS_URL"</span> },
   <span class="p">"azure_swa"</span>:  { <span class="p">"environment"</span>: <span class="s">"production"</span> },
   <span class="p">"ftp"</span>:       { <span class="p">"host"</span>: <span class="s">"ftp.example.com"</span>, <span class="p">"remote_dir"</span>: <span class="s">"/public_html"</span> }
 }</pre>
@@ -224,7 +224,7 @@
           <h3>合併優先序</h3>
           <p>CLI flags &gt; <code>.now.json</code> &gt; <code>~/.config/now/settings.json</code>。本機設定覆寫全域，命令列 flag 覆寫一切。</p>
           <h3 style="margin-top:1.5rem">安全性</h3>
-          <p>token、password、secret、account key 一律不寫進設定檔。Firebase Hosting 用 <code>firebase login</code>、Azure 用 <code>az login</code>、SWA 用環境變數、FTP 用環境變數。<code>now config set</code> 也會擋下明顯像祕密的 key。</p>
+          <p>token、password、secret、account key 一律不寫進設定檔。Firebase Hosting 用 <code>firebase login</code>、Azure Blob 的 SAS URL 放在 <code>.env</code>，SWA 與 FTP 用環境變數。<code>now config set</code> 也會擋下明顯像祕密的 key。</p>
           <div class="cmdline" style="margin-top:1rem">$ now config doctor  <span class="muted" style="margin-left:.6rem"># 檢查設定與 provider CLI</span></div>
         </div>
       </div>
