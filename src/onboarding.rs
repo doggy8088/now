@@ -157,7 +157,8 @@ fn prompt_azure_blob<R: BufRead, W: Write>(
     let existing_sas_url = crate::env_file::env_value(&env_name, local_env.as_ref());
 
     let sas_url = if let Some(existing) = &existing_sas_url {
-        let masked = crate::azure_blob::mask_sas_url(existing).unwrap_or_else(|_| "<invalid>".to_owned());
+        let masked =
+            crate::azure_blob::mask_sas_url(existing).unwrap_or_else(|_| "<invalid>".to_owned());
         let prompt_text = format!("Azure Storage Blob container SAS URL [{masked}]: ");
         let answer = prompt(input, output, &prompt_text)?;
         match answer {
@@ -443,7 +444,11 @@ mod tests {
     fn first_run_setup_uses_existing_sas_url_from_env_file_as_default() {
         let temp = TempDir::new().unwrap();
         let env_path = temp.path().join(".env");
-        std::fs::write(&env_path, "NOW_AZURE_BLOB_SAS_URL=\"https://acct.blob.core.windows.net/$web?sv=1&sig=secret\"\n").unwrap();
+        std::fs::write(
+            &env_path,
+            "NOW_AZURE_BLOB_SAS_URL=\"https://acct.blob.core.windows.net/$web?sv=1&sig=secret\"\n",
+        )
+        .unwrap();
 
         let answers = b"2\n\n\nmy-prefix\n";
         let mut input = Cursor::new(answers.as_slice());

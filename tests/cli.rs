@@ -343,7 +343,6 @@ fn azure_blob_dry_run_supports_prefix_and_masks_sas() {
         .stderr(predicate::str::is_empty());
 }
 
-
 #[test]
 fn azure_storage_blob_provider_accepts_display_name_as_cli_value() {
     let site = TempDir::new().unwrap();

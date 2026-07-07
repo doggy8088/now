@@ -18,9 +18,9 @@ fn apply_prefix(url: &mut Url, prefix: Option<&str>) -> Result<()> {
     if let Some(prefix) = prefix {
         let prefix_trimmed = prefix.trim();
         if !prefix_trimmed.is_empty() {
-            let mut segments = url
-                .path_segments_mut()
-                .map_err(|_| anyhow!("Azure Storage Blob SAS URL cannot be used as a blob base URL"))?;
+            let mut segments = url.path_segments_mut().map_err(|_| {
+                anyhow!("Azure Storage Blob SAS URL cannot be used as a blob base URL")
+            })?;
             segments.pop_if_empty();
             for part in prefix_trimmed.split('/') {
                 if !part.is_empty() {
@@ -65,11 +65,9 @@ pub fn public_blob_url_for_relative_path(
     relative_path: &Path,
 ) -> Option<String> {
     let sas_url = optional_sas_url(config, env_file)?;
-    let mut url = blob_url_for_relative_path(
-        &sas_url,
-        config.azure_blob.prefix.as_deref(),
-        relative_path,
-    ).ok()?;
+    let mut url =
+        blob_url_for_relative_path(&sas_url, config.azure_blob.prefix.as_deref(), relative_path)
+            .ok()?;
     url.set_query(None);
     Some(url.to_string())
 }
