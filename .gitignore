@@ -1,0 +1,9 @@
+/target/
+/node_modules/
+/npm/*-bin/
+/.npm/
+*.log
+.DS_Store
+.env
+.env.*
+dist/
