@@ -15,8 +15,8 @@
 - GitHub Release repository 為 `doggy8088/now`。
 - `now` 預設等同 `now deploy`。
 - 部署時自動選擇靜態資產目錄。
-- 實際部署交給既有 provider CLI 執行。
-- 部署後輸出預設 URL。
+- 實際部署依 provider 使用既有 CLI 或內建上傳流程執行。
+- 部署後自動判斷並輸出主要 URL。
 
 **初版重點是包裝與協調部署流程，不重新實作雲端 provider 的部署協定。**
 
@@ -55,7 +55,7 @@ now deploy [path]
 需要支援的子命令：
 
 ```sh
-now deploy [path] [--provider <firebase|azure-blob|azure-swa|ftp>] [--dry-run] [--json]
+now deploy [path] [--provider <firebase-hosting|azure-storage-blob|azure-static-web-app|any-website-ftp>] [--dry-run] [--json]
 now config init [--global|--local]
 now config set <key> <value> [--global|--local]
 now config get [key] [--global|--local]
@@ -69,6 +69,8 @@ now config doctor
 - `--dry-run` 不執行 provider CLI，只輸出將執行的部署資訊。
 - `--json` 以 JSON 格式輸出部署摘要。
 - `config doctor` 檢查設定檔、provider、provider CLI 可用性與明顯祕密設定。
+- 第一次在互動式終端機執行 `now` 或 `now deploy`，且尚未設定 provider 時，必須啟動首次設定流程，協助使用者選擇 provider 並把非祕密設定寫入 `.now.json`。
+- 非互動式環境或 `--json` 模式不得啟動互動式提示，必須直接輸出缺少 provider 的錯誤。
 
 ### 3.2 來源目錄決策
 
@@ -89,12 +91,12 @@ now config doctor
 部署後輸出的 URL 依序選擇：
 
 1. `.now.json` 或全域設定中的 `default_url`
-2. `index.html`
-3. `index.htm`
-4. 根目錄唯一的 `.html` 或 `.htm` 頁面
-5. provider base URL
+2. `index.html` 搭配 `base_url` 或 provider 可推導的公開 URL
+3. `index.htm` 搭配 `base_url` 或 provider 可推導的公開 URL
+4. 根目錄唯一的 `.html` 或 `.htm` 頁面，搭配 `base_url` 或 provider 可推導的公開 URL
+5. provider base URL 或 provider 可推導的公開 URL
 
-若未設定 `base_url`，可輸出相對檔名。
+畫面必須以 `Default URL: <url>` 顯示判斷結果。若 `base_url` 與 `default_url` 都是 `null`，工具必須盡量從 provider 設定推導完整 URL；目前 Azure Storage Blob 必須從 SAS URL 推導並移除 SAS query string。若無法推導，可輸出相對檔名。
 
 * * *
 
@@ -113,13 +115,13 @@ now config doctor
 2. `.now.json`
 3. `~/.config/now/settings.json`
 
-**設定檔只保存非祕密設定。token、password、account key 不得寫入設定檔。**
+**設定檔通常只保存非祕密設定。`azure_blob.sas_url` 例外，SAS URL 含有上傳權杖，若寫入 `.now.json` 必須保護該檔案。**
 
 設定範例：
 
 ```json
 {
-  "provider": "firebase",
+  "provider": "firebase-hosting",
   "source": null,
   "base_url": "https://example.web.app",
   "default_url": null,
@@ -128,9 +130,7 @@ now config doctor
     "site": null
   },
   "azure_blob": {
-    "account": "mystorageaccount",
-    "container": "$web",
-    "destination_path": null
+    "sas_url": "https://mystorageaccount.blob.core.windows.net/$web?sv=..."
   },
   "azure_swa": {
     "app_name": null,
@@ -161,7 +161,12 @@ now config doctor
 
 必要設定：
 
-- `provider`: `firebase`
+- `provider`: `firebase-hosting`
+
+相容需求：
+
+- 既有設定值 `firebase` 必須仍可被讀取。
+- 使用者可見名稱必須是 `Firebase Hosting`。
 
 可選設定：
 
@@ -170,40 +175,51 @@ now config doctor
 - `base_url`
 - `default_url`
 
-### 5.2 Azure Blob static website
+### 5.2 Azure Storage Blob
 
 需求：
 
-- 使用 Azure CLI。
-- 使用者需自行完成 `az login`。
-- 部署命令使用 `az storage blob upload-batch`。
-- 預設 container 為 `$web`。
-- 初版不自動建立 storage account、container 或 static website 設定。
+- 不依賴 Azure CLI。
+- 使用者只需提供 container SAS URL。
+- 首次設定選擇 `Azure Storage Blob` 時，只能要求使用者輸入 SAS URL，不應要求 storage account、container 名稱或 Azure CLI 登入。
+- SAS URL 必須具備建立或寫入 blob 的權限。
+- 部署時由 now 直接使用 Azure Blob Put Blob REST API 上傳每個檔案。
+- 每個上傳要求需使用 `x-ms-blob-type: BlockBlob`。
+- 若 `base_url` 與 `default_url` 都是 `null`，必須從 SAS URL 與預設檔案規則推導 `Default URL`，且輸出時不得包含 SAS query string。
+- 初版不自動建立 storage account、container、SAS 或 static website 設定。
 
 必要設定：
 
-- `provider`: `azure-blob`
-- `azure_blob.account`
+- `provider`: `azure-storage-blob`
+- `azure_blob.sas_url`
+
+相容需求：
+
+- 既有設定值 `azure-blob` 必須仍可被讀取。
+- 使用者可見名稱必須是 `Azure Storage Blob`。
 
 可選設定：
 
-- `azure_blob.container`
-- `azure_blob.destination_path`
 - `base_url`
 - `default_url`
 
-### 5.3 Azure Static Web Apps
+### 5.3 Azure Static Web App
 
 需求：
 
-- 使用 Azure Static Web Apps CLI。
+- 使用 SWA CLI。
 - 部署命令為 `swa deploy <source>`。
 - deployment token 應使用環境變數保存。
 - 預設 token 環境變數為 `SWA_CLI_DEPLOYMENT_TOKEN`。
 
 必要設定：
 
-- `provider`: `azure-swa`
+- `provider`: `azure-static-web-app`
+
+相容需求：
+
+- 既有設定值 `azure-swa` 必須仍可被讀取。
+- 使用者可見名稱必須是 `Azure Static Web App`。
 
 可選設定：
 
@@ -213,7 +229,7 @@ now config doctor
 - `base_url`
 - `default_url`
 
-### 5.4 FTP
+### 5.4 Any Website (FTP)
 
 需求：
 
@@ -223,8 +239,13 @@ now config doctor
 
 必要設定：
 
-- `provider`: `ftp`
+- `provider`: `any-website-ftp`
 - `ftp.host`
+
+相容需求：
+
+- 既有設定值 `ftp` 必須仍可被讀取。
+- 使用者可見名稱必須是 `Any Website (FTP)`。
 
 可選設定：
 
@@ -332,6 +353,7 @@ make fmt-check
 make lint
 make npm-pack
 make check
+make install
 make install-local
 make clean
 ```
@@ -340,6 +362,7 @@ make clean
 
 - `make help` 可列出目標用途。
 - `make check` 執行格式檢查、lint、測試與 npm pack dry-run。
+- `make install` 可把 release binary 安裝到 `$HOME/.local/bin/now`。
 - `make install-local` 可把 release binary 安裝到指定 prefix。
 
 * * *
@@ -382,6 +405,7 @@ Rust 整合測試：
 
 - `now --help`
 - `now deploy --dry-run`
+- `now deploy` 可用預設 URL 規則顯示 `Default URL: <url>`。
 - `now config get/set`
 - provider CLI 缺失提示。
 
@@ -404,6 +428,7 @@ Makefile 驗收：
 - `make help`
 - `make check`
 - `make npm-pack`
+- `make install`
 - `make install-local`
 
 README 驗收：
@@ -421,9 +446,9 @@ README 驗收：
 - 不自動建立雲端資源。
 - 不支援 Linux arm64。
 - 不支援 musl Linux。
-- 不重新實作 Firebase、Azure 或 FTP 的部署協定。
-- FTP 不做遠端刪除同步。
-- 不在設定檔保存 token、password、secret 或 account key。
+- 不重新實作 Firebase Hosting、Azure Static Web App 或 Any Website (FTP) 的部署協定。
+- Any Website (FTP) 不做遠端刪除同步。
+- 不在設定檔保存 token、password、secret 或 account key。Azure Storage Blob SAS URL 為例外，但必須視為祕密。
 
 * * *
 
@@ -434,7 +459,7 @@ README 驗收：
 - Windows 直接安裝預設位置為 `$env:LOCALAPPDATA\now\bin`。
 - 初版支援 macOS arm64、macOS x64、Linux x64、Windows x64。
 - 初版不自動建立雲端資源，只部署到已設定完成的 provider target。
-- FTP 初版不做遠端刪除同步，避免誤刪。
+- Any Website (FTP) 初版不做遠端刪除同步，避免誤刪。
 
 * * *
 

@@ -2,11 +2,42 @@ use assert_cmd::Command;
 use assert_fs::TempDir;
 use assert_fs::prelude::*;
 use predicates::prelude::*;
+use std::env;
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 fn now_cmd(config_home: &TempDir) -> Command {
     let mut command = Command::cargo_bin("now").unwrap();
     command.env("NOW_CONFIG_HOME", config_home.path());
     command
+}
+
+#[cfg(unix)]
+fn write_fake_cli(bin_dir: &TempDir, name: &str, body: &str) {
+    let script = bin_dir.child(name);
+    script.write_str(body).unwrap();
+    let mut permissions = std::fs::metadata(script.path()).unwrap().permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(script.path(), permissions).unwrap();
+}
+
+#[cfg(windows)]
+fn write_fake_cli(bin_dir: &TempDir, name: &str, body: &str) {
+    bin_dir
+        .child(format!("{name}.cmd"))
+        .write_str(body)
+        .unwrap();
+}
+
+fn path_with_fake_bin(bin_dir: &TempDir) -> String {
+    let old_path = env::var_os("PATH").unwrap_or_default();
+    env::join_paths(
+        std::iter::once(bin_dir.path().to_path_buf()).chain(env::split_paths(&old_path)),
+    )
+    .unwrap()
+    .to_string_lossy()
+    .into_owned()
 }
 
 #[test]
@@ -27,7 +58,7 @@ fn deploy_dry_run_uses_configured_provider() {
     site.child(".now.json")
         .write_str(
             r#"{
-  "provider": "firebase",
+  "provider": "firebase-hosting",
   "base_url": "https://example.web.app"
 }
 "#,
@@ -41,7 +72,7 @@ fn deploy_dry_run_uses_configured_provider() {
         .success()
         .stdout(predicate::str::contains("firebase deploy --only hosting"))
         .stdout(predicate::str::contains(
-            "https://example.web.app/index.html",
+            "Default URL: https://example.web.app/index.html",
         ));
 }
 
@@ -52,7 +83,7 @@ fn config_set_and_get_local_value() {
 
     now_cmd(&config_home)
         .current_dir(site.path())
-        .args(["config", "set", "provider", "firebase"])
+        .args(["config", "set", "provider", "firebase-hosting"])
         .assert()
         .success();
 
@@ -61,7 +92,7 @@ fn config_set_and_get_local_value() {
         .args(["config", "get", "provider"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("firebase"));
+        .stdout(predicate::str::contains("firebase-hosting"));
 }
 
 #[test]
@@ -70,7 +101,13 @@ fn missing_provider_cli_returns_install_hint() {
     let config_home = TempDir::new().unwrap();
     site.child("public/index.html").write_str("ok").unwrap();
     site.child(".now.json")
-        .write_str(r#"{ "provider": "firebase" }"#)
+        .write_str(
+            r#"{
+  "provider": "firebase-hosting",
+  "base_url": "https://infinitybin.blob.core.windows.net/now/now"
+}
+"#,
+        )
         .unwrap();
 
     now_cmd(&config_home)
@@ -81,4 +118,191 @@ fn missing_provider_cli_returns_install_hint() {
         .failure()
         .stderr(predicate::str::contains("Provider CLI not found"))
         .stderr(predicate::str::contains("npm install -g firebase-tools"));
+}
+
+#[test]
+fn deploy_reports_default_url_from_auto_selection_rules() {
+    let site = TempDir::new().unwrap();
+    let config_home = TempDir::new().unwrap();
+    let bin_dir = TempDir::new().unwrap();
+    site.child("public/index.html").write_str("ok").unwrap();
+    site.child(".now.json")
+        .write_str(
+            r#"{
+  "provider": "firebase-hosting",
+  "base_url": "https://infinitybin.blob.core.windows.net/now/now"
+}
+"#,
+        )
+        .unwrap();
+
+    #[cfg(unix)]
+    write_fake_cli(
+        &bin_dir,
+        "firebase",
+        "#!/bin/sh\nprintf 'Project Console: https://console.firebase.google.com/project/demo\\nHosting URL: https://demo.web.app\\n'\n",
+    );
+    #[cfg(windows)]
+    write_fake_cli(
+        &bin_dir,
+        "firebase",
+        "@echo off\r\necho Project Console: https://console.firebase.google.com/project/demo\r\necho Hosting URL: https://demo.web.app\r\n",
+    );
+
+    let output = now_cmd(&config_home)
+        .current_dir(site.path())
+        .env("PATH", path_with_fake_bin(&bin_dir))
+        .arg("deploy")
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("Hosting URL: https://demo.web.app"));
+    assert!(
+        stdout.contains(
+            "\nDefault URL: https://infinitybin.blob.core.windows.net/now/now/index.html\n"
+        )
+    );
+    assert!(!stdout.contains("\nDefault URL: https://demo.web.app\n"));
+}
+
+#[test]
+fn firebase_hosting_provider_accepts_display_name_and_legacy_alias() {
+    let site = TempDir::new().unwrap();
+    let config_home = TempDir::new().unwrap();
+    site.child("public/index.html").write_str("ok").unwrap();
+    site.child(".now.json")
+        .write_str(r#"{ "provider": "firebase" }"#)
+        .unwrap();
+
+    now_cmd(&config_home)
+        .current_dir(site.path())
+        .args(["deploy", "--provider", "Firebase Hosting", "--dry-run"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Provider: Firebase Hosting"))
+        .stdout(predicate::str::contains("firebase deploy --only hosting"));
+}
+
+#[test]
+fn missing_provider_in_non_interactive_mode_does_not_prompt() {
+    let site = TempDir::new().unwrap();
+    let config_home = TempDir::new().unwrap();
+    site.child("public/index.html").write_str("ok").unwrap();
+
+    now_cmd(&config_home)
+        .current_dir(site.path())
+        .args(["deploy", "--dry-run"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::contains("provider is not configured"))
+        .stderr(predicate::str::contains("Choose a provider").not());
+}
+
+#[test]
+fn azure_blob_dry_run_does_not_require_azure_cli_or_print_sas_secret() {
+    let site = TempDir::new().unwrap();
+    let config_home = TempDir::new().unwrap();
+    site.child("public/index.html").write_str("ok").unwrap();
+    site.child(".now.json")
+        .write_str(
+            r#"{
+  "provider": "azure-storage-blob",
+  "azure_blob": {
+    "sas_url": "https://infinitybin.blob.core.windows.net/now/now?sv=1&sig=secret"
+  }
+}
+"#,
+        )
+        .unwrap();
+
+    now_cmd(&config_home)
+        .current_dir(site.path())
+        .env("PATH", "/definitely/missing")
+        .args(["deploy", "--dry-run"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Azure Storage Blob SAS upload"))
+        .stdout(predicate::str::contains(
+            "Default URL: https://infinitybin.blob.core.windows.net/now/now/index.html",
+        ))
+        .stdout(predicate::str::contains("secret").not())
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
+fn azure_storage_blob_provider_accepts_display_name_as_cli_value() {
+    let site = TempDir::new().unwrap();
+    let config_home = TempDir::new().unwrap();
+    site.child("public/index.html").write_str("ok").unwrap();
+    site.child(".now.json")
+        .write_str(
+            r#"{
+  "azure_blob": {
+    "sas_url": "https://acct.blob.core.windows.net/$web?sv=1&sig=secret"
+  }
+}
+"#,
+        )
+        .unwrap();
+
+    now_cmd(&config_home)
+        .current_dir(site.path())
+        .args(["deploy", "--provider", "Azure Storage Blob", "--dry-run"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Provider: Azure Storage Blob"))
+        .stdout(predicate::str::contains("secret").not());
+}
+
+#[test]
+fn azure_static_web_app_provider_accepts_display_name() {
+    let site = TempDir::new().unwrap();
+    let config_home = TempDir::new().unwrap();
+    site.child("public/index.html").write_str("ok").unwrap();
+    site.child(".now.json")
+        .write_str(
+            r#"{
+  "azure_swa": {
+    "deployment_token_env": "SWA_TOKEN"
+  }
+}
+"#,
+        )
+        .unwrap();
+
+    now_cmd(&config_home)
+        .current_dir(site.path())
+        .args(["deploy", "--provider", "Azure Static Web App", "--dry-run"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Provider: Azure Static Web App"))
+        .stdout(predicate::str::contains("swa deploy"));
+}
+
+#[test]
+fn any_website_ftp_provider_accepts_display_name() {
+    let site = TempDir::new().unwrap();
+    let config_home = TempDir::new().unwrap();
+    site.child("public/index.html").write_str("ok").unwrap();
+    site.child(".now.json")
+        .write_str(
+            r#"{
+  "ftp": {
+    "host": "ftp.example.com"
+  }
+}
+"#,
+        )
+        .unwrap();
+
+    now_cmd(&config_home)
+        .current_dir(site.path())
+        .args(["deploy", "--provider", "Any Website (FTP)", "--dry-run"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Provider: Any Website (FTP)"))
+        .stdout(predicate::str::contains("lftp"));
 }

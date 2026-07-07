@@ -1,14 +1,12 @@
 use anyhow::{Context, Result, bail};
-use clap::ValueEnum;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value, json};
 use std::env;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProviderKind {
     Firebase,
     AzureBlob,
@@ -19,18 +17,70 @@ pub enum ProviderKind {
 impl ProviderKind {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Firebase => "firebase",
-            Self::AzureBlob => "azure-blob",
-            Self::AzureSwa => "azure-swa",
-            Self::Ftp => "ftp",
+            Self::Firebase => "firebase-hosting",
+            Self::AzureBlob => "azure-storage-blob",
+            Self::AzureSwa => "azure-static-web-app",
+            Self::Ftp => "any-website-ftp",
+        }
+    }
+
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::Firebase => "Firebase Hosting",
+            Self::AzureBlob => "Azure Storage Blob",
+            Self::AzureSwa => "Azure Static Web App",
+            Self::Ftp => "Any Website (FTP)",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match normalize_provider_name(value).as_str() {
+            "firebase-hosting" | "firebase" => Some(Self::Firebase),
+            "azure-storage-blob" | "azure-blob" => Some(Self::AzureBlob),
+            "azure-static-web-app" | "azure-static-web-apps" | "azure-swa" => Some(Self::AzureSwa),
+            "any-website-ftp" | "any-website-(ftp)" | "ftp" => Some(Self::Ftp),
+            _ => None,
         }
     }
 }
 
 impl fmt::Display for ProviderKind {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.as_str())
+        formatter.write_str(self.display_name())
     }
+}
+
+impl Serialize for ProviderKind {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for ProviderKind {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::parse(&value).ok_or_else(|| {
+            serde::de::Error::custom(format!(
+                "unsupported provider {value}; expected firebase-hosting, azure-storage-blob, azure-static-web-app, or any-website-ftp"
+            ))
+        })
+    }
+}
+
+fn normalize_provider_name(value: &str) -> String {
+    value
+        .trim()
+        .to_ascii_lowercase()
+        .replace('_', "-")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join("-")
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -57,6 +107,7 @@ pub struct FirebaseConfig {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct AzureBlobConfig {
+    pub sas_url: Option<String>,
     pub account: Option<String>,
     pub container: Option<String>,
     pub destination_path: Option<String>,
@@ -108,9 +159,7 @@ pub fn default_config() -> Value {
             "site": null
         },
         "azure_blob": {
-            "account": null,
-            "container": "$web",
-            "destination_path": null
+            "sas_url": null
         },
         "azure_swa": {
             "environment": "production",
@@ -368,7 +417,40 @@ mod tests {
 
     #[test]
     fn parses_provider_names_from_config() {
+        let config = parse_config(json!({ "provider": "firebase-hosting" })).unwrap();
+        assert_eq!(config.provider, Some(ProviderKind::Firebase));
+
+        let config = parse_config(json!({ "provider": "Firebase Hosting" })).unwrap();
+        assert_eq!(config.provider, Some(ProviderKind::Firebase));
+
+        let config = parse_config(json!({ "provider": "firebase" })).unwrap();
+        assert_eq!(config.provider, Some(ProviderKind::Firebase));
+
+        let config = parse_config(json!({ "provider": "azure-storage-blob" })).unwrap();
+        assert_eq!(config.provider, Some(ProviderKind::AzureBlob));
+
+        let config = parse_config(json!({ "provider": "Azure Storage Blob" })).unwrap();
+        assert_eq!(config.provider, Some(ProviderKind::AzureBlob));
+
         let config = parse_config(json!({ "provider": "azure-blob" })).unwrap();
         assert_eq!(config.provider, Some(ProviderKind::AzureBlob));
+
+        let config = parse_config(json!({ "provider": "azure-static-web-app" })).unwrap();
+        assert_eq!(config.provider, Some(ProviderKind::AzureSwa));
+
+        let config = parse_config(json!({ "provider": "Azure Static Web App" })).unwrap();
+        assert_eq!(config.provider, Some(ProviderKind::AzureSwa));
+
+        let config = parse_config(json!({ "provider": "azure-swa" })).unwrap();
+        assert_eq!(config.provider, Some(ProviderKind::AzureSwa));
+
+        let config = parse_config(json!({ "provider": "any-website-ftp" })).unwrap();
+        assert_eq!(config.provider, Some(ProviderKind::Ftp));
+
+        let config = parse_config(json!({ "provider": "Any Website (FTP)" })).unwrap();
+        assert_eq!(config.provider, Some(ProviderKind::Ftp));
+
+        let config = parse_config(json!({ "provider": "ftp" })).unwrap();
+        assert_eq!(config.provider, Some(ProviderKind::Ftp));
     }
 }

@@ -1,3 +1,4 @@
+use crate::azure_blob::display_upload_command;
 use crate::config::{
     ProviderKind, default_config, get_key, global_config_path, local_config_path,
     merged_config_value, parse_config, parse_config_value, read_json_file, secret_paths, set_key,
@@ -40,7 +41,7 @@ struct DeployArgs {
     #[arg(value_name = "PATH")]
     path: Option<PathBuf>,
 
-    #[arg(long, value_enum)]
+    #[arg(long, value_parser = parse_provider)]
     provider: Option<ProviderKind>,
 
     #[arg(long)]
@@ -228,6 +229,17 @@ fn doctor_config(cwd: &std::path::Path) -> Result<()> {
     match config.provider {
         Some(provider) => {
             println!("Provider: {provider}");
+            if provider == ProviderKind::AzureBlob {
+                match display_upload_command(&config, cwd) {
+                    Ok(command) => {
+                        println!("Command: {command}");
+                        println!("Provider CLI: not required");
+                    }
+                    Err(error) => println!("Provider config: {error:#}"),
+                }
+                return Ok(());
+            }
+
             match build_provider_command(provider, &config, cwd) {
                 Ok(command) => {
                     println!("Command: {}", command.display_line());
@@ -253,4 +265,12 @@ fn print_json_value(value: &Value) -> Result<()> {
         _ => println!("{}", serde_json::to_string_pretty(value)?),
     }
     Ok(())
+}
+
+fn parse_provider(value: &str) -> std::result::Result<ProviderKind, String> {
+    ProviderKind::parse(value).ok_or_else(|| {
+        format!(
+            "unsupported provider {value}; expected firebase-hosting, azure-storage-blob, azure-static-web-app, or any-website-ftp"
+        )
+    })
 }

@@ -106,7 +106,11 @@ pub fn build_provider_command(
 ) -> Result<ProviderCommand> {
     match provider {
         ProviderKind::Firebase => firebase_command(config),
-        ProviderKind::AzureBlob => azure_blob_command(config, source),
+        ProviderKind::AzureBlob => {
+            bail!(
+                "provider Azure Storage Blob uses built-in SAS URL upload and does not require a provider CLI"
+            )
+        }
         ProviderKind::AzureSwa => azure_swa_command(config, source),
         ProviderKind::Ftp => ftp_command(config, source),
     }
@@ -130,40 +134,6 @@ fn firebase_command(config: &NowConfig) -> Result<ProviderCommand> {
         "firebase",
         args,
         "firebase",
-    ))
-}
-
-fn azure_blob_command(config: &NowConfig, source: &Path) -> Result<ProviderCommand> {
-    let account = non_empty(config.azure_blob.account.as_deref())
-        .context("azure_blob.account is required for provider azure-blob")?;
-    let container = non_empty(config.azure_blob.container.as_deref()).unwrap_or("$web");
-    let overwrite = config.azure_blob.overwrite.unwrap_or(true).to_string();
-
-    let mut args = vec![
-        "storage".to_owned(),
-        "blob".to_owned(),
-        "upload-batch".to_owned(),
-        "--source".to_owned(),
-        source.display().to_string(),
-        "--destination".to_owned(),
-        container.to_owned(),
-        "--overwrite".to_owned(),
-        overwrite,
-        "--auth-mode".to_owned(),
-        "login".to_owned(),
-        "--account-name".to_owned(),
-        account.to_owned(),
-    ];
-
-    if let Some(destination_path) = non_empty(config.azure_blob.destination_path.as_deref()) {
-        args.extend(["--destination-path".to_owned(), destination_path.to_owned()]);
-    }
-
-    Ok(ProviderCommand::new(
-        ProviderKind::AzureBlob,
-        "az",
-        args,
-        "az",
     ))
 }
 
@@ -191,8 +161,8 @@ fn azure_swa_command(config: &NowConfig, source: &Path) -> Result<ProviderComman
 }
 
 fn ftp_command(config: &NowConfig, source: &Path) -> Result<ProviderCommand> {
-    let host =
-        non_empty(config.ftp.host.as_deref()).context("ftp.host is required for provider ftp")?;
+    let host = non_empty(config.ftp.host.as_deref())
+        .context("ftp.host is required for provider Any Website (FTP)")?;
     let remote_dir = non_empty(config.ftp.remote_dir.as_deref()).unwrap_or("/");
     let username_env = non_empty(config.ftp.username_env.as_deref()).unwrap_or("NOW_FTP_USERNAME");
     let password_env = non_empty(config.ftp.password_env.as_deref()).unwrap_or("NOW_FTP_PASSWORD");
@@ -237,7 +207,9 @@ fn non_empty(value: Option<&str>) -> Option<&str> {
 pub fn provider_install_hint(provider: ProviderKind) -> &'static str {
     match provider {
         ProviderKind::Firebase => "Install Firebase CLI with: npm install -g firebase-tools",
-        ProviderKind::AzureBlob => "Install Azure CLI and sign in with: az login",
+        ProviderKind::AzureBlob => {
+            "Azure Storage Blob uses built-in SAS URL upload and does not require Azure CLI"
+        }
         ProviderKind::AzureSwa => "Install SWA CLI with: npm install -g @azure/static-web-apps-cli",
         ProviderKind::Ftp => "Install lftp with your system package manager",
     }
@@ -316,13 +288,13 @@ mod tests {
     }
 
     #[test]
-    fn azure_blob_command_requires_account_without_secret() {
+    fn azure_blob_command_builder_is_not_used_for_native_upload() {
         let config = NowConfig::default();
         let error = build_provider_command(ProviderKind::AzureBlob, &config, Path::new("public"))
             .unwrap_err()
             .to_string();
 
-        assert!(error.contains("azure_blob.account"));
+        assert!(error.contains("built-in SAS URL upload"));
     }
 
     #[test]

@@ -1,0 +1,382 @@
+use crate::config::{
+    ProviderKind, default_config, get_key, local_config_path, merge_values, read_json_file,
+    set_key, write_json_file,
+};
+use anyhow::{Context, Result, bail};
+use serde_json::Value;
+use std::io::{BufRead, Write};
+use std::path::Path;
+
+pub fn run_first_run_setup<R: BufRead, W: Write>(
+    root: &Path,
+    input: &mut R,
+    output: &mut W,
+) -> Result<ProviderKind> {
+    let path = local_config_path(root);
+    let existing = read_json_file(&path)?;
+    let mut config = default_config();
+    merge_values(&mut config, existing);
+
+    writeln!(output, "No provider is configured for now.")?;
+    writeln!(
+        output,
+        "This first-time setup writes settings to .now.json."
+    )?;
+    writeln!(
+        output,
+        "Keep tokens, passwords, and account keys in provider login state or environment variables."
+    )?;
+    writeln!(output)?;
+
+    let provider = prompt_provider(input, output)?;
+    set_key(
+        &mut config,
+        "provider",
+        Value::String(provider.as_str().to_owned()),
+    )?;
+
+    if provider != ProviderKind::AzureBlob {
+        prompt_common_settings(input, output, &mut config)?;
+    }
+    match provider {
+        ProviderKind::Firebase => prompt_firebase(input, output, &mut config)?,
+        ProviderKind::AzureBlob => prompt_azure_blob(input, output, &mut config)?,
+        ProviderKind::AzureSwa => prompt_azure_swa(input, output, &mut config)?,
+        ProviderKind::Ftp => prompt_ftp(input, output, &mut config)?,
+    }
+
+    write_json_file(&path, &config)?;
+    writeln!(output)?;
+    writeln!(output, "Created {}", path.display())?;
+    writeln!(output, "Continuing with deployment.")?;
+
+    Ok(provider)
+}
+
+fn prompt_provider<R: BufRead, W: Write>(input: &mut R, output: &mut W) -> Result<ProviderKind> {
+    writeln!(output, "Choose a provider:")?;
+    writeln!(output, "  1. Firebase Hosting")?;
+    writeln!(output, "  2. Azure Storage Blob")?;
+    writeln!(output, "  3. Azure Static Web App")?;
+    writeln!(output, "  4. Any Website (FTP)")?;
+
+    loop {
+        let answer = prompt(input, output, "Provider [Firebase Hosting]: ")?;
+        let answer = answer.as_deref().unwrap_or("firebase-hosting").trim();
+        if let Some(provider) = parse_provider_choice(answer) {
+            return Ok(provider);
+        }
+        writeln!(
+            output,
+            "Enter 1, 2, 3, 4, firebase-hosting, Firebase Hosting, azure-storage-blob, Azure Storage Blob, azure-static-web-app, Azure Static Web App, any-website-ftp, or Any Website (FTP)."
+        )?;
+    }
+}
+
+fn prompt_common_settings<R: BufRead, W: Write>(
+    input: &mut R,
+    output: &mut W,
+    config: &mut Value,
+) -> Result<()> {
+    let base_url_default = get_string(config, "base_url");
+    let base_url = prompt_optional(input, output, "Base URL", base_url_default.as_deref())?;
+    set_optional_string(config, "base_url", base_url)?;
+
+    let default_url_default = get_string(config, "default_url");
+    let default_url = prompt_optional(
+        input,
+        output,
+        "Default URL override",
+        default_url_default.as_deref(),
+    )?;
+    set_optional_string(config, "default_url", default_url)?;
+
+    Ok(())
+}
+
+fn prompt_firebase<R: BufRead, W: Write>(
+    input: &mut R,
+    output: &mut W,
+    config: &mut Value,
+) -> Result<()> {
+    let project = prompt_optional(
+        input,
+        output,
+        "Firebase project",
+        get_string(config, "firebase.project").as_deref(),
+    )?;
+    set_optional_string(config, "firebase.project", project)?;
+
+    let site = prompt_optional(
+        input,
+        output,
+        "Firebase hosting site",
+        get_string(config, "firebase.site").as_deref(),
+    )?;
+    set_optional_string(config, "firebase.site", site)?;
+
+    Ok(())
+}
+
+fn prompt_azure_blob<R: BufRead, W: Write>(
+    input: &mut R,
+    output: &mut W,
+    config: &mut Value,
+) -> Result<()> {
+    writeln!(
+        output,
+        "Azure Storage Blob SAS URL includes upload credentials. Protect .now.json if you save it there."
+    )?;
+    let sas_url = prompt_required(
+        input,
+        output,
+        "Azure Storage Blob container SAS URL",
+        get_string(config, "azure_blob.sas_url").as_deref(),
+    )?;
+    set_key(config, "azure_blob.sas_url", Value::String(sas_url))?;
+
+    Ok(())
+}
+
+fn prompt_azure_swa<R: BufRead, W: Write>(
+    input: &mut R,
+    output: &mut W,
+    config: &mut Value,
+) -> Result<()> {
+    let app_name = prompt_optional(
+        input,
+        output,
+        "Azure Static Web App app name",
+        get_string(config, "azure_swa.app_name").as_deref(),
+    )?;
+    set_optional_string(config, "azure_swa.app_name", app_name)?;
+
+    let environment = prompt_optional(
+        input,
+        output,
+        "Azure Static Web App environment",
+        get_string(config, "azure_swa.environment")
+            .as_deref()
+            .or(Some("production")),
+    )?
+    .unwrap_or_else(|| "production".to_owned());
+    set_key(config, "azure_swa.environment", Value::String(environment))?;
+
+    let token_env = prompt_optional(
+        input,
+        output,
+        "Azure Static Web App token environment variable",
+        get_string(config, "azure_swa.deployment_token_env")
+            .as_deref()
+            .or(Some("SWA_CLI_DEPLOYMENT_TOKEN")),
+    )?
+    .unwrap_or_else(|| "SWA_CLI_DEPLOYMENT_TOKEN".to_owned());
+    set_key(
+        config,
+        "azure_swa.deployment_token_env",
+        Value::String(token_env),
+    )?;
+
+    Ok(())
+}
+
+fn prompt_ftp<R: BufRead, W: Write>(
+    input: &mut R,
+    output: &mut W,
+    config: &mut Value,
+) -> Result<()> {
+    let host = prompt_required(
+        input,
+        output,
+        "FTP host",
+        get_string(config, "ftp.host").as_deref(),
+    )?;
+    set_key(config, "ftp.host", Value::String(host))?;
+
+    let remote_dir = prompt_optional(
+        input,
+        output,
+        "FTP remote directory",
+        get_string(config, "ftp.remote_dir")
+            .as_deref()
+            .or(Some("/")),
+    )?
+    .unwrap_or_else(|| "/".to_owned());
+    set_key(config, "ftp.remote_dir", Value::String(remote_dir))?;
+
+    let username_env = prompt_optional(
+        input,
+        output,
+        "FTP username environment variable",
+        get_string(config, "ftp.username_env")
+            .as_deref()
+            .or(Some("NOW_FTP_USERNAME")),
+    )?
+    .unwrap_or_else(|| "NOW_FTP_USERNAME".to_owned());
+    set_key(config, "ftp.username_env", Value::String(username_env))?;
+
+    let password_env = prompt_optional(
+        input,
+        output,
+        "FTP password environment variable",
+        get_string(config, "ftp.password_env")
+            .as_deref()
+            .or(Some("NOW_FTP_PASSWORD")),
+    )?
+    .unwrap_or_else(|| "NOW_FTP_PASSWORD".to_owned());
+    set_key(config, "ftp.password_env", Value::String(password_env))?;
+
+    Ok(())
+}
+
+fn prompt_optional<R: BufRead, W: Write>(
+    input: &mut R,
+    output: &mut W,
+    label: &str,
+    default: Option<&str>,
+) -> Result<Option<String>> {
+    let prompt_text = match default {
+        Some(default) if !default.trim().is_empty() => format!("{label} [{default}]: "),
+        _ => format!("{label} (optional): "),
+    };
+    let answer = prompt(input, output, &prompt_text)?;
+    match answer {
+        Some(answer) if !answer.trim().is_empty() => Ok(Some(answer.trim().to_owned())),
+        _ => Ok(default
+            .map(str::to_owned)
+            .filter(|value| !value.trim().is_empty())),
+    }
+}
+
+fn prompt_required<R: BufRead, W: Write>(
+    input: &mut R,
+    output: &mut W,
+    label: &str,
+    default: Option<&str>,
+) -> Result<String> {
+    loop {
+        let prompt_text = match default {
+            Some(default) if !default.trim().is_empty() => format!("{label} [{default}]: "),
+            _ => format!("{label}: "),
+        };
+        let answer = prompt(input, output, &prompt_text)?;
+        if answer.is_none() && default.is_none() {
+            bail!("{label} is required");
+        }
+        if let Some(answer) = answer {
+            let answer = answer.trim();
+            if !answer.is_empty() {
+                return Ok(answer.to_owned());
+            }
+        }
+        if let Some(default) = default.filter(|value| !value.trim().is_empty()) {
+            return Ok(default.to_owned());
+        }
+        writeln!(output, "{label} is required.")?;
+    }
+}
+
+fn prompt<R: BufRead, W: Write>(
+    input: &mut R,
+    output: &mut W,
+    prompt_text: &str,
+) -> Result<Option<String>> {
+    write!(output, "{prompt_text}")?;
+    output.flush()?;
+
+    let mut answer = String::new();
+    let bytes = input
+        .read_line(&mut answer)
+        .context("failed to read setup answer")?;
+    if bytes == 0 {
+        return Ok(None);
+    }
+    Ok(Some(answer.trim_end_matches(['\r', '\n']).to_owned()))
+}
+
+fn parse_provider_choice(value: &str) -> Option<ProviderKind> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "" | "1" | "firebase-hosting" | "firebase hosting" | "firebase" => {
+            Some(ProviderKind::Firebase)
+        }
+        "2" | "azure-storage-blob" | "azure storage blob" | "azure-blob" | "azure_blob" => {
+            Some(ProviderKind::AzureBlob)
+        }
+        "3" | "azure-static-web-app" | "azure static web app" | "azure-swa" | "azure_swa" => {
+            Some(ProviderKind::AzureSwa)
+        }
+        "4" | "any-website-ftp" | "any website (ftp)" | "any website ftp" | "ftp" => {
+            Some(ProviderKind::Ftp)
+        }
+        _ => None,
+    }
+}
+
+fn get_string(value: &Value, key: &str) -> Option<String> {
+    get_key(value, key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+}
+
+fn set_optional_string(config: &mut Value, key: &str, value: Option<String>) -> Result<()> {
+    if let Some(value) = value {
+        set_key(config, key, Value::String(value))?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use assert_fs::TempDir;
+    use serde_json::json;
+    use std::io::Cursor;
+
+    #[test]
+    fn first_run_setup_writes_firebase_config_without_secrets() {
+        let temp = TempDir::new().unwrap();
+        let answers = b"1\nhttps://example.web.app\n\nmy-project\n\n";
+        let mut input = Cursor::new(answers.as_slice());
+        let mut output = Vec::new();
+
+        let provider = run_first_run_setup(temp.path(), &mut input, &mut output).unwrap();
+        let config = read_json_file(&local_config_path(temp.path())).unwrap();
+
+        assert_eq!(provider, ProviderKind::Firebase);
+        assert_eq!(
+            get_key(&config, "provider"),
+            Some(&json!("firebase-hosting"))
+        );
+        assert_eq!(
+            get_key(&config, "base_url"),
+            Some(&json!("https://example.web.app"))
+        );
+        assert_eq!(
+            get_key(&config, "firebase.project"),
+            Some(&json!("my-project"))
+        );
+        assert!(String::from_utf8(output).unwrap().contains(".now.json"));
+    }
+
+    #[test]
+    fn first_run_setup_accepts_azure_blob_sas_url() {
+        let temp = TempDir::new().unwrap();
+        let answers = b"2\nhttps://acct.blob.core.windows.net/$web?sv=1&sig=secret\n";
+        let mut input = Cursor::new(answers.as_slice());
+        let mut output = Vec::new();
+
+        let provider = run_first_run_setup(temp.path(), &mut input, &mut output).unwrap();
+        let config = read_json_file(&local_config_path(temp.path())).unwrap();
+
+        assert_eq!(provider, ProviderKind::AzureBlob);
+        assert_eq!(
+            get_key(&config, "azure_blob.sas_url"),
+            Some(&json!(
+                "https://acct.blob.core.windows.net/$web?sv=1&sig=secret"
+            ))
+        );
+        assert!(String::from_utf8(output).unwrap().contains("SAS URL"));
+    }
+}

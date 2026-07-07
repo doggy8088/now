@@ -1,5 +1,7 @@
+use crate::azure_blob::{display_upload_command, upload_directory};
 use crate::config::{NowConfig, ProviderKind, merged_config_value, parse_config};
 use crate::fs_rules::is_excluded_path;
+use crate::onboarding::run_first_run_setup;
 use crate::provider::{build_provider_command, program_available, provider_install_hint};
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
@@ -45,11 +47,27 @@ pub struct PreparedSource {
 }
 
 pub fn execute_deploy(request: DeployRequest) -> Result<()> {
-    let merged_value = merged_config_value(&request.cwd, request.provider)?;
-    let config = parse_config(merged_value)?;
-    let provider = config
-        .provider
-        .context("provider is not configured; use --provider or set provider in .now.json")?;
+    let mut merged_value = merged_config_value(&request.cwd, request.provider)?;
+    let mut config = parse_config(merged_value)?;
+    let provider = match config.provider {
+        Some(provider) => provider,
+        None if should_prompt_first_run(&request) => {
+            let stdin = io::stdin();
+            let mut input = io::BufReader::new(stdin.lock());
+            let stdout = io::stdout();
+            let mut output = stdout.lock();
+            run_first_run_setup(&request.cwd, &mut input, &mut output)?;
+
+            merged_value = merged_config_value(&request.cwd, request.provider)?;
+            config = parse_config(merged_value)?;
+            config
+                .provider
+                .context("provider is not configured after first-time setup")?
+        }
+        None => {
+            bail!("provider is not configured; use --provider or set provider in .now.json");
+        }
+    };
 
     let mut selection = select_source(
         &request.cwd,
@@ -73,8 +91,43 @@ pub fn execute_deploy(request: DeployRequest) -> Result<()> {
     }
 
     let prepared = prepare_source(&selection)?;
-    let command = build_provider_command(provider, &config, &prepared.path)?;
     let default_url = choose_default_url(&config, provider, &prepared.path);
+
+    if provider == ProviderKind::AzureBlob {
+        let command = display_upload_command(&config, &prepared.path)?;
+        if request.dry_run {
+            print_deploy_summary(
+                &selection,
+                &prepared.path,
+                provider,
+                &command,
+                default_url.as_deref(),
+                true,
+                request.json,
+            )?;
+            return Ok(());
+        }
+
+        let upload_summary = upload_directory(&config, &prepared.path)?;
+        print_deploy_summary(
+            &selection,
+            &prepared.path,
+            provider,
+            &command,
+            default_url.as_deref(),
+            false,
+            request.json,
+        )?;
+        if !request.json {
+            println!(
+                "Uploaded: {} files, {} bytes",
+                upload_summary.files, upload_summary.bytes
+            );
+        }
+        return Ok(());
+    }
+
+    let command = build_provider_command(provider, &config, &prepared.path)?;
 
     if request.dry_run {
         print_deploy_summary(
@@ -99,21 +152,7 @@ pub fn execute_deploy(request: DeployRequest) -> Result<()> {
     }
     command.validate_environment()?;
 
-    let mut process = Command::new(&command.program);
-    process.args(&command.args);
-    if let Some(cwd) = &command.cwd {
-        process.current_dir(cwd);
-    } else {
-        process.current_dir(&request.cwd);
-    }
-    command.apply_environment(&mut process)?;
-
-    let status = process
-        .status()
-        .with_context(|| format!("failed to run provider CLI: {}", command.program))?;
-    if !status.success() {
-        bail!("provider command failed with status {status}");
-    }
+    run_provider_command(&command, &request.cwd)?;
 
     print_deploy_summary(
         &selection,
@@ -125,6 +164,37 @@ pub fn execute_deploy(request: DeployRequest) -> Result<()> {
         request.json,
     )?;
     Ok(())
+}
+
+fn run_provider_command(
+    command: &crate::provider::ProviderCommand,
+    request_cwd: &Path,
+) -> Result<()> {
+    let mut process = Command::new(&command.program);
+    process.args(&command.args);
+    if let Some(cwd) = &command.cwd {
+        process.current_dir(cwd);
+    } else {
+        process.current_dir(request_cwd);
+    }
+    command.apply_environment(&mut process)?;
+
+    let output = process
+        .output()
+        .with_context(|| format!("failed to run provider CLI: {}", command.program))?;
+
+    io::stdout().write_all(&output.stdout)?;
+    io::stderr().write_all(&output.stderr)?;
+
+    if !output.status.success() {
+        bail!("provider command failed with status {}", output.status);
+    }
+
+    Ok(())
+}
+
+fn should_prompt_first_run(request: &DeployRequest) -> bool {
+    request.provider.is_none() && !request.json && io::stdin().is_terminal()
 }
 
 pub fn select_source(
@@ -211,7 +281,12 @@ pub fn choose_default_url(
     let base_url = config.provider_base_url(provider);
     for file_name in ["index.html", "index.htm"] {
         if source.join(file_name).is_file() {
-            return Some(join_url(base_url, file_name));
+            return Some(default_url_for_file(
+                config,
+                provider,
+                base_url,
+                Path::new(file_name),
+            ));
         }
     }
 
@@ -234,11 +309,44 @@ pub fn choose_default_url(
             .collect::<Vec<_>>();
 
         if html_files.len() == 1 {
-            return Some(join_url(base_url, &html_files[0]));
+            return Some(default_url_for_file(
+                config,
+                provider,
+                base_url,
+                Path::new(&html_files[0]),
+            ));
         }
     }
 
-    base_url.map(str::to_owned)
+    base_url
+        .map(str::to_owned)
+        .or_else(|| inferred_provider_base_url(config, provider))
+}
+
+fn default_url_for_file(
+    config: &NowConfig,
+    provider: ProviderKind,
+    base_url: Option<&str>,
+    relative_path: &Path,
+) -> String {
+    if let Some(base_url) = base_url {
+        return join_url(Some(base_url), &relative_path.to_string_lossy());
+    }
+
+    match provider {
+        ProviderKind::AzureBlob => {
+            crate::azure_blob::public_blob_url_for_relative_path(config, relative_path)
+                .unwrap_or_else(|| relative_path.to_string_lossy().into_owned())
+        }
+        _ => relative_path.to_string_lossy().into_owned(),
+    }
+}
+
+fn inferred_provider_base_url(config: &NowConfig, provider: ProviderKind) -> Option<String> {
+    match provider {
+        ProviderKind::AzureBlob => crate::azure_blob::public_base_url(config),
+        _ => None,
+    }
 }
 
 fn join_url(base_url: Option<&str>, file_name: &str) -> String {
@@ -361,8 +469,8 @@ fn print_deploy_summary(
         println!("Dry run: provider command was not executed");
     }
     match default_url {
-        Some(url) => println!("URL: {url}"),
-        None => println!("URL: not resolved; set default_url or base_url"),
+        Some(url) => println!("Default URL: {url}"),
+        None => println!("Default URL: not resolved; set default_url or base_url"),
     }
     Ok(())
 }
@@ -446,6 +554,27 @@ mod tests {
         assert_eq!(
             choose_default_url(&config, ProviderKind::Firebase, temp.path()).as_deref(),
             Some("https://example.com/custom")
+        );
+    }
+
+    #[test]
+    fn default_url_infers_azure_blob_url_from_sas_when_base_url_is_missing() {
+        let temp = TempDir::new().unwrap();
+        temp.child("index.html").write_str("ok").unwrap();
+
+        let config = NowConfig {
+            azure_blob: crate::config::AzureBlobConfig {
+                sas_url: Some(
+                    "https://infinitybin.blob.core.windows.net/now/now?sv=1&sig=secret".to_owned(),
+                ),
+                ..Default::default()
+            },
+            ..NowConfig::default()
+        };
+
+        assert_eq!(
+            choose_default_url(&config, ProviderKind::AzureBlob, temp.path()).as_deref(),
+            Some("https://infinitybin.blob.core.windows.net/now/now/index.html")
         );
     }
 }

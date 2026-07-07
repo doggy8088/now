@@ -5,7 +5,7 @@ NPM ?= npm
 PREFIX ?= $(HOME)/.local
 BINARY := now
 
-.PHONY: help build release-build test fmt fmt-check lint npm-pack check install-local clean
+.PHONY: help build release-build test fmt fmt-check lint npm-pack check install install-local clean
 
 help:
 	@printf '%s\n' \
@@ -18,6 +18,7 @@ help:
 		'  make lint           Run clippy with warnings as errors' \
 		'  make npm-pack       Dry-run npm package contents' \
 		'  make check          Run formatting, lint, tests, and npm pack dry-run' \
+		'  make install        Install release binary into $(HOME)/.local/bin' \
 		'  make install-local  Install release binary into $(PREFIX)/bin' \
 		'  make clean          Remove build artifacts'
 
@@ -44,6 +45,8 @@ npm-pack:
 	$(NPM) pack --dry-run
 
 check: fmt-check lint test npm-pack
+
+install: install-local
 
 install-local: release-build
 	mkdir -p "$(PREFIX)/bin"

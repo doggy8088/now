@@ -10,9 +10,11 @@ repository = "https://github.com/doggy8088/now"
 anyhow = "1"
 clap = { version = "4.5", features = ["derive"] }
 dirs = "6"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
+url = "2"
 walkdir = "2"
 
 [dev-dependencies]

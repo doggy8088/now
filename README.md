@@ -68,14 +68,21 @@ iwr https://raw.githubusercontent.com/doggy8088/now/main/install.ps1 -OutFile in
 ## 快速開始
 
 ```sh
-now config init
-now config set provider firebase
 now
 now deploy
 now deploy dist
 ```
 
 `now [path]` 等同 `now deploy [path]`。
+
+第一次在互動式終端機執行 `now` 或 `now deploy`，且尚未設定 provider 時，CLI 會啟動首次設定流程，協助選擇 provider 並把非祕密設定寫入 `.now.json`。非互動式環境或 `--json` 模式不會啟動提示流程，會直接輸出缺少 provider 的錯誤。
+
+也可以手動建立設定：
+
+```sh
+now config init
+now config set provider firebase-hosting
+```
 
 * * *
 
@@ -94,13 +101,13 @@ now 讀取兩種設定檔：
 2. `.now.json`
 3. `~/.config/now/settings.json`
 
-**設定檔只保存非祕密設定。token、password、secret、account key 不應寫入設定檔。**
+**設定檔通常只保存非祕密設定。`azure_blob.sas_url` 例外，SAS URL 含有上傳權杖，若寫入 `.now.json` 必須保護該檔案。**
 
 完整範例：
 
 ```json
 {
-  "provider": "firebase",
+  "provider": "firebase-hosting",
   "source": null,
   "base_url": "https://example.web.app",
   "default_url": null,
@@ -109,9 +116,7 @@ now 讀取兩種設定檔：
     "site": null
   },
   "azure_blob": {
-    "account": "mystorageaccount",
-    "container": "$web",
-    "destination_path": null
+    "sas_url": "https://mystorageaccount.blob.core.windows.net/$web?sv=..."
   },
   "azure_swa": {
     "app_name": null,
@@ -132,7 +137,7 @@ now 讀取兩種設定檔：
 ```sh
 now config init
 now config init --global
-now config set provider firebase
+now config set provider firebase-hosting
 now config set firebase.project my-project
 now config get
 now config get provider
@@ -155,7 +160,7 @@ firebase login
 建議設定：
 
 ```sh
-now config set provider firebase
+now config set provider firebase-hosting
 now config set firebase.project my-project
 now config set base_url https://my-project.web.app
 ```
@@ -168,30 +173,32 @@ firebase deploy --only hosting
 
 若設定 `firebase.site`，會改用 `hosting:<site>`。
 
-### Azure Blob static website
+為了相容舊設定，`firebase` 仍可被讀取；新設定建議使用 `firebase-hosting`。
 
-需求：
+### Azure Storage Blob
 
-```sh
-az login
-```
+Azure Storage Blob provider 不需要 Azure CLI。只要提供 container SAS URL，now 會直接使用 Azure Blob REST API 上傳檔案。
 
-Azure Storage static website 通常使用 `$web` container。建議設定：
+首次設定選擇 `Azure Storage Blob` 時，只會要求輸入 SAS URL。
 
-```sh
-now config set provider azure-blob
-now config set azure_blob.account mystorageaccount
-now config set azure_blob.container '$web'
-now config set base_url https://mystorageaccount.z13.web.core.windows.net
-```
-
-部署時會呼叫：
+建議設定：
 
 ```sh
-az storage blob upload-batch --source <source> --destination '$web' --overwrite true --auth-mode login --account-name mystorageaccount
+now config set provider azure-storage-blob
+now config set azure_blob.sas_url 'https://mystorageaccount.blob.core.windows.net/$web?sv=...'
 ```
 
-### Azure Static Web Apps
+為了相容舊設定，`azure-blob` 仍可被讀取；新設定建議使用 `azure-storage-blob`。
+
+SAS URL 必須指向 container，例如 Azure Static Website 常用的 `$web` container，且需要具備建立或寫入 blob 的權限。部署時會對每個檔案呼叫 Azure Blob Put Blob API，並使用 `x-ms-blob-type: BlockBlob`。
+
+```sh
+PUT https://mystorageaccount.blob.core.windows.net/$web/<file>?<sas-query>
+```
+
+若未設定 `base_url` 與 `default_url`，now 會從 SAS URL 移除 query string，再加上預設頁面檔名來推導 `Default URL`。
+
+### Azure Static Web App
 
 需求：
 
@@ -203,7 +210,7 @@ npm install -g @azure/static-web-apps-cli
 
 ```sh
 export SWA_CLI_DEPLOYMENT_TOKEN=...
-now config set provider azure-swa
+now config set provider azure-static-web-app
 now config set azure_swa.environment production
 now config set azure_swa.deployment_token_env SWA_CLI_DEPLOYMENT_TOKEN
 ```
@@ -214,7 +221,9 @@ now config set azure_swa.deployment_token_env SWA_CLI_DEPLOYMENT_TOKEN
 swa deploy <source> --env production
 ```
 
-### FTP
+為了相容舊設定，`azure-swa` 仍可被讀取；新設定建議使用 `azure-static-web-app`。
+
+### Any Website (FTP)
 
 需求：
 
@@ -227,12 +236,14 @@ lftp --version
 ```sh
 export NOW_FTP_USERNAME=deploy-user
 export NOW_FTP_PASSWORD=...
-now config set provider ftp
+now config set provider any-website-ftp
 now config set ftp.host ftp.example.com
 now config set ftp.remote_dir /public_html
 ```
 
 部署時會用 `lftp mirror -R --only-newer` 上傳。初版不做遠端刪除同步。
+
+為了相容舊設定，`ftp` 仍可被讀取；新設定建議使用 `any-website-ftp`。
 
 * * *
 
@@ -264,12 +275,12 @@ now ./public
 部署後輸出的 URL 依序選擇：
 
 1. `.now.json` 或全域設定中的 `default_url`
-2. `<base_url>/index.html`
-3. `<base_url>/index.htm`
-4. 根目錄唯一的 `.html` 或 `.htm` 頁面
-5. provider base URL
+2. `index.html` 搭配 `base_url` 或 provider 可推導的公開 URL
+3. `index.htm` 搭配 `base_url` 或 provider 可推導的公開 URL
+4. 根目錄唯一的 `.html` 或 `.htm` 頁面，搭配 `base_url` 或 provider 可推導的公開 URL
+5. provider base URL 或 provider 可推導的公開 URL
 
-若沒有 `base_url`，檔案規則會輸出相對頁面名稱，例如 `index.html`。
+畫面會以 `Default URL: <url>` 顯示判斷結果。若 `base_url` 與 `default_url` 都是 `null`，now 會盡量從 provider 設定推導完整 URL；目前 Azure Storage Blob 會從 SAS URL 推導。若無法推導，檔案規則會輸出相對頁面名稱，例如 `index.html`。
 
 * * *
 
@@ -280,7 +291,7 @@ now --help
 now
 now public
 now deploy
-now deploy dist --provider firebase
+now deploy dist --provider firebase-hosting
 now deploy --dry-run
 now deploy --dry-run --json
 now config get --global
@@ -291,16 +302,16 @@ now config doctor
 
 ## 安全性
 
-**不要把 token、password、secret 或 account key 寫入 `.now.json`。**
+**不要把 token、password、secret 或 account key 寫入 `.now.json`。Azure Storage Blob 的 SAS URL 具有上傳權限，若寫入 `.now.json`，必須把它視為祕密。**
 
 建議做法：
 
 | 類型 | 建議 |
 | --- | --- |
-| Firebase | 使用 `firebase login` 的既有登入狀態 |
-| Azure Blob | 使用 `az login` 與 `--auth-mode login` |
-| Azure Static Web Apps | 使用 `SWA_CLI_DEPLOYMENT_TOKEN` 或自訂 token 環境變數 |
-| FTP | 使用 `NOW_FTP_USERNAME` 與 `NOW_FTP_PASSWORD` 環境變數 |
+| Firebase Hosting | 使用 `firebase login` 的既有登入狀態 |
+| Azure Storage Blob | 使用短效期、最小權限的 container SAS URL |
+| Azure Static Web App | 使用 `SWA_CLI_DEPLOYMENT_TOKEN` 或自訂 token 環境變數 |
+| Any Website (FTP) | 使用 `NOW_FTP_USERNAME` 與 `NOW_FTP_PASSWORD` 環境變數 |
 
 `now config set` 會拒絕明顯像祕密的 key，但仍應避免把敏感值放進 repository。
 
@@ -312,7 +323,7 @@ now config doctor
 | --- | --- |
 | provider CLI 找不到 | 安裝對應 CLI，並確認它在 `PATH` 內 |
 | 沒有部署權限 | 先用 provider CLI 完成登入與權限確認 |
-| 找不到預設 URL | 設定 `default_url` 或 `base_url` |
+| 找不到預設 URL | 設定 `default_url` 或 `base_url`，或確認 provider 設定足以推導公開 URL |
 | npm 安裝時下載 release asset 失敗 | 確認版本對應的 GitHub Release asset 已發布 |
 | checksum 驗證失敗 | 刪除安裝快取後重裝，並確認 release asset 與 `.sha256` 來自同一個版本 |
 
@@ -343,8 +354,11 @@ make check
 make test
 make release-build
 make npm-pack
+make install
 make install-local
 ```
+
+`make install` 會把 release binary 安裝到 `$HOME/.local/bin/now`。若要改安裝 prefix，使用 `PREFIX=/custom make install-local`。
 
 release asset 命名必須固定：
 
