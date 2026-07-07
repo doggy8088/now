@@ -184,7 +184,7 @@
     var og = new URLSearchParams(location.search).get("og");
     var qTheme = new URLSearchParams(location.search).get("theme");
     var stored = localStorage.getItem(LS_THEME);
-    var pref = og === "1" ? "light" : (qTheme === "dark" || qTheme === "light" ? qTheme : (stored || (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")));
+    var pref = qTheme === "dark" || qTheme === "light" ? qTheme : (og === "1" ? "light" : (stored || (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")));
     applyTheme(pref);
     var btn = $("#themeBtn");
     if (btn) btn.addEventListener("click", function () {
@@ -210,7 +210,9 @@
     var cur = $("#langCur");
     if (cur) cur.textContent = SHORT[lang] || lang;
     $all("#langMenu li").forEach(function (li) {
-      li.classList.toggle("active", li.getAttribute("data-lang") === lang);
+      var isCur = li.getAttribute("data-lang") === lang;
+      li.classList.toggle("active", isCur);
+      li.setAttribute("aria-selected", isCur ? "true" : "false");
     });
     var m = META[lang] || META["zh-TW"];
     document.title = m.title;
@@ -239,23 +241,56 @@
 
     var btn = $("#langBtn"), menu = $("#langMenu");
     if (btn && menu) {
+      var opts = $all("li", menu);
+      function closeMenu(focusBtn) {
+        menu.classList.remove("open");
+        btn.setAttribute("aria-expanded", "false");
+        if (focusBtn) btn.focus();
+      }
+      function openMenu() {
+        menu.classList.add("open");
+        btn.setAttribute("aria-expanded", "true");
+      }
+      function focusOpt(i) {
+        opts.forEach(function (o, idx) { o.setAttribute("tabindex", idx === i ? "0" : "-1"); });
+        opts[i].focus();
+      }
+      function selectOpt(li) {
+        var l = li.getAttribute("data-lang");
+        localStorage.setItem(LS_LANG, l);
+        applyLang(l);
+        closeMenu(true);
+      }
       btn.addEventListener("click", function (e) {
         e.stopPropagation();
-        var open = menu.classList.toggle("open");
-        btn.setAttribute("aria-expanded", open ? "true" : "false");
+        if (menu.classList.contains("open")) { closeMenu(false); return; }
+        openMenu();
+        var curIdx = Math.max(0, opts.findIndex(function (o) { return o.classList.contains("active"); }));
+        focusOpt(curIdx);
       });
-      $all("li", menu).forEach(function (li) {
-        li.addEventListener("click", function () {
-          var l = li.getAttribute("data-lang");
-          localStorage.setItem(LS_LANG, l);
-          applyLang(l);
-          menu.classList.remove("open");
-          btn.setAttribute("aria-expanded", "false");
+      btn.addEventListener("keydown", function (e) {
+        if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          openMenu();
+          var curIdx = Math.max(0, opts.findIndex(function (o) { return o.classList.contains("active"); }));
+          focusOpt(curIdx);
+        }
+      });
+      opts.forEach(function (li, i) {
+        li.addEventListener("click", function () { selectOpt(li); });
+        li.addEventListener("keydown", function (e) {
+          switch (e.key) {
+            case "ArrowDown": e.preventDefault(); focusOpt((i + 1) % opts.length); break;
+            case "ArrowUp": e.preventDefault(); focusOpt((i - 1 + opts.length) % opts.length); break;
+            case "Home": e.preventDefault(); focusOpt(0); break;
+            case "End": e.preventDefault(); focusOpt(opts.length - 1); break;
+            case "Enter": case " ": e.preventDefault(); selectOpt(li); break;
+            case "Escape": e.preventDefault(); closeMenu(true); break;
+            case "Tab": closeMenu(false); break;
+          }
         });
       });
-      document.addEventListener("click", function () {
-        menu.classList.remove("open"); btn.setAttribute("aria-expanded", "false");
-      });
+      document.addEventListener("click", function () { closeMenu(false); });
       menu.addEventListener("click", function (e) { e.stopPropagation(); });
     }
   }

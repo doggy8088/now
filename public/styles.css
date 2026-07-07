@@ -140,7 +140,8 @@ p { margin: 0 0 1.2rem; max-width: 70ch; }
 .lang-menu { position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 60; list-style: none; margin: 0; padding: 0.4rem; min-width: 11rem; background: var(--bg); border: 1px solid var(--rule); border-radius: 0.6rem; box-shadow: 0 16px 40px -20px oklch(0.2 0.1 60 / 0.4); display: none; }
 .lang-menu.open { display: block; }
 .lang-menu li { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.55rem 0.7rem; border-radius: 0.4rem; cursor: pointer; font-size: 0.9rem; color: var(--ink); }
-.lang-menu li:hover, .lang-menu li.active { background: var(--surface); }
+.lang-menu li:hover, .lang-menu li.active, .lang-menu li:focus-visible { background: var(--surface); }
+.lang-menu li:focus-visible { outline: 2px solid var(--primary-ink); outline-offset: -2px; }
 .lang-menu li.active { color: var(--primary-ink); }
 .lang-menu code { font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted); }
 
@@ -198,7 +199,8 @@ p { margin: 0 0 1.2rem; max-width: 70ch; }
 
 /* providers */
 .providers { background: var(--surface); }
-.prov-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1px; margin-top: clamp(2.5rem, 5vw, 4rem); background: var(--rule); border: 1px solid var(--rule); border-radius: 0.85rem; overflow: hidden; }
+.prov-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; margin-top: clamp(2.5rem, 5vw, 4rem); background: var(--rule); border: 1px solid var(--rule); border-radius: 0.85rem; overflow: hidden; }
+@media (max-width: 640px) { .prov-list { grid-template-columns: 1fr; } }
 .prov { background: var(--bg); padding: clamp(1.4rem, 2.4vw, 2rem); display: flex; flex-direction: column; gap: 0.7rem; }
 .prov-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
 .prov h3 { font-family: var(--font-cjk-body); font-weight: 700; font-size: 1.15rem; }
@@ -243,7 +245,7 @@ p { margin: 0 0 1.2rem; max-width: 70ch; }
 .footer .brand { color: #fff; }
 .footer-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 2rem; }
 @media (max-width: 720px) { .footer-grid { grid-template-columns: 1fr; gap: 1.5rem; } }
-.footer h4 { font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--footer-mute); margin: 0 0 1rem; font-weight: 500; }
+.footer h3 { font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--footer-mute); margin: 0 0 1rem; font-weight: 500; }
 .footer ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; font-size: 0.95rem; }
 .footer p { color: var(--footer-soft); max-width: 38ch; }
 .footer-bottom { margin-top: clamp(2.5rem, 5vw, 4rem); padding-top: 1.5rem; border-top: 1px solid var(--footer-rule); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem; font-family: var(--font-mono); font-size: 0.8rem; color: var(--footer-mute); }
