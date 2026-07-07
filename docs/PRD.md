@@ -56,7 +56,7 @@ now deploy [path]
 
 ```sh
 now deploy [path] [--provider <firebase-hosting|azure-storage-blob|azure-static-web-app|any-website-ftp>] [--dry-run] [--json]
-now config init [--global|--local]
+now init [--global|--local]
 now config set <key> <value> [--global|--local]
 now config get [key] [--global|--local]
 now config doctor
@@ -404,6 +404,7 @@ Rust 單元測試：
 Rust 整合測試：
 
 - `now --help`
+- `now init`
 - `now deploy --dry-run`
 - `now deploy` 可用預設 URL 規則顯示 `Default URL: <url>`。
 - `now config get/set`

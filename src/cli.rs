@@ -30,6 +30,7 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 enum Command {
     Deploy(DeployArgs),
+    Init(ScopeArgs),
     Config {
         #[command(subcommand)]
         command: ConfigCommand,
@@ -53,7 +54,6 @@ struct DeployArgs {
 
 #[derive(Debug, Subcommand)]
 enum ConfigCommand {
-    Init(ScopeArgs),
     Set(ConfigSetArgs),
     Get(ConfigGetArgs),
     Doctor,
@@ -138,6 +138,7 @@ fn execute(cli: Cli) -> Result<()> {
             dry_run: args.dry_run,
             json: args.json,
         }),
+        Some(Command::Init(scope)) => init_config(scope.write_scope(), &cwd),
         Some(Command::Config { command }) => execute_config(command, cwd),
         None => execute_deploy(DeployRequest {
             cwd,
@@ -152,7 +153,6 @@ fn execute(cli: Cli) -> Result<()> {
 
 fn execute_config(command: ConfigCommand, cwd: PathBuf) -> Result<()> {
     match command {
-        ConfigCommand::Init(scope) => init_config(scope.write_scope(), &cwd),
         ConfigCommand::Set(args) => {
             set_config(args.scope.write_scope(), &cwd, &args.key, &args.value)
         }

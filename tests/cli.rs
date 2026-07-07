@@ -96,6 +96,34 @@ fn config_set_and_get_local_value() {
 }
 
 #[test]
+fn init_creates_local_config() {
+    let site = TempDir::new().unwrap();
+    let config_home = TempDir::new().unwrap();
+
+    now_cmd(&config_home)
+        .current_dir(site.path())
+        .arg("init")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Created"));
+
+    site.child(".now.json").assert(predicate::path::exists());
+}
+
+#[test]
+fn config_init_is_no_longer_supported() {
+    let site = TempDir::new().unwrap();
+    let config_home = TempDir::new().unwrap();
+
+    now_cmd(&config_home)
+        .current_dir(site.path())
+        .args(["config", "init"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unrecognized subcommand 'init'"));
+}
+
+#[test]
 fn missing_provider_cli_returns_install_hint() {
     let site = TempDir::new().unwrap();
     let config_home = TempDir::new().unwrap();

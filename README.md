@@ -80,7 +80,7 @@ now deploy dist
 也可以手動建立設定：
 
 ```sh
-now config init
+now init
 now config set provider firebase-hosting
 ```
 
@@ -135,8 +135,8 @@ now 讀取兩種設定檔：
 常用設定命令：
 
 ```sh
-now config init
-now config init --global
+now init
+now init --global
 now config set provider firebase-hosting
 now config set firebase.project my-project
 now config get
