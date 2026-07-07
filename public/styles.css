@@ -248,6 +248,8 @@ p { margin: 0 0 1.2rem; max-width: 70ch; }
 .footer p { color: var(--footer-soft); max-width: 38ch; }
 .footer-bottom { margin-top: clamp(2.5rem, 5vw, 4rem); padding-top: 1.5rem; border-top: 1px solid var(--footer-rule); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem; font-family: var(--font-mono); font-size: 0.8rem; color: var(--footer-mute); }
 .footer-bottom .tagline { color: var(--footer-soft); }
+.footer-bottom a { color: var(--footer-ink); text-decoration: underline; text-underline-offset: 0.2em; text-decoration-thickness: 1px; }
+.footer-bottom a:hover { color: var(--primary); }
 
 /* hero atmosphere */
 .hero-atm { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: -1; }

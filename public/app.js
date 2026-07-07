@@ -14,7 +14,7 @@
   var T = {
     "zh-TW": {
       "nav.tagline":"一行命令部署靜態網站","nav.why":"為什麼","nav.providers":"支援平台","nav.flow":"流程","nav.config":"設定","nav.install":"安裝",
-      "hero.eyebrow":"靜態網站部署 · v0.1","hero.title":"一行命令，<br>把靜態網站<em>交給雲端</em>。","hero.lede":"<code>now</code> 整合 Firebase Hosting、Azure 與 FTP 的部署流程。選好資料夾、組好命令、部署完直接給你網址——部署從一堆步驟，變成一步。","hero.ctaPrimary":"開始使用","copy.label":"複製",
+      "hero.eyebrow":"靜態網站部署","hero.title":"一行命令，<br>把靜態網站<em>交給雲端</em>。","hero.lede":"<code>now</code> 整合 Firebase Hosting、Azure 與 FTP 的部署流程。選好資料夾、組好命令、部署完直接給你網址——部署從一堆步驟，變成一步。","hero.ctaPrimary":"開始使用","copy.label":"複製",
       "hero.meta1":"macOS Apple / Intel","hero.meta2":"Linux x64","hero.meta3":"Windows x64","hero.meta4":"SHA-256 驗證",
       "why.eyebrow":"為什麼是 now","why.title":"不重寫雲端，<br>只把部署收攏成一步。",
       "why.1.h":"不重新造輪子","why.1.p":"now 不重寫 Firebase、Azure 或 FTP，而是接手你已經在用的 CLI。你既有的登入和權限都直接沿用，不用重新設定。",
@@ -38,12 +38,12 @@
       "install.win.p":"預設安裝到 <code>$env:LOCALAPPDATA\\now\\bin</code>。可用 <code>-InstallDir</code> 覆寫。",
       "install.manual.p":"下載對應平台 archive 與同名 <code>.sha256</code>，驗證 checksum 後解壓縮，把 <code>now</code> 或 <code>now.exe</code> 放進 PATH 內目錄。",
       "cta.title":"準備好了嗎？","cta.lede":"建置好靜態資產，一行命令把它交給雲端。","cta.github":"查看 GitHub","cta.install":"安裝 now",
-      "footer.desc":"把靜態網站交給既有 provider 部署流程。不重寫雲端協定，只把流程收攏成一步。","footer.resources":"資源","footer.latest":"最新 Release","footer.nav":"導覽","footer.tagline":"在午後陽光裡部署靜態網站。","footer.copy":"MIT License · © 2026 Will 保哥",
+      "footer.desc":"把靜態網站交給既有 provider 部署流程。不重寫雲端協定，只把流程收攏成一步。","footer.resources":"資源","footer.latest":"最新 Release","footer.nav":"導覽","footer.tagline":"在午後陽光裡部署靜態網站。","footer.copy":"MIT License · © 2026 <a href='https://www.facebook.com/will.fans/' target='_blank' rel='noopener'>Will 保哥</a>",
       "aria.theme":"切換主題","aria.lang":"選擇語言","aria.menu":"選單"
     },
     "zh-CN": {
       "nav.tagline":"一行命令部署静态网站","nav.why":"为什么","nav.providers":"支持平台","nav.flow":"流程","nav.config":"设置","nav.install":"安装",
-      "hero.eyebrow":"静态网站部署 · v0.1","hero.title":"一行命令，<br>把静态网站<em>交给云端</em>。","hero.lede":"<code>now</code> 整合 Firebase Hosting、Azure 和 FTP 的部署流程。选好文件夹、组装好命令、部署完直接给你网址——部署从一堆步骤，变成一步。","hero.ctaPrimary":"开始使用","copy.label":"复制",
+      "hero.eyebrow":"静态网站部署","hero.title":"一行命令，<br>把静态网站<em>交给云端</em>。","hero.lede":"<code>now</code> 整合 Firebase Hosting、Azure 和 FTP 的部署流程。选好文件夹、组装好命令、部署完直接给你网址——部署从一堆步骤，变成一步。","hero.ctaPrimary":"开始使用","copy.label":"复制",
       "hero.meta1":"macOS Apple / Intel","hero.meta2":"Linux x64","hero.meta3":"Windows x64","hero.meta4":"SHA-256 校验",
       "why.eyebrow":"为什么选 now","why.title":"不重写云端，<br>只把部署收拢成一步。",
       "why.1.h":"不重新造轮子","why.1.p":"now 不重写 Firebase、Azure 或 FTP，而是接手你已经在用的 CLI。你已有的登录和权限都能直接沿用，不用重新设置。",
@@ -67,12 +67,12 @@
       "install.win.p":"默认安装到 <code>$env:LOCALAPPDATA\\now\\bin</code>。可用 <code>-InstallDir</code> 覆盖。",
       "install.manual.p":"下载对应平台 archive 和同名 <code>.sha256</code>，校验 checksum 后解压，把 <code>now</code> 或 <code>now.exe</code> 放进 PATH 内目录。",
       "cta.title":"准备好了吗？","cta.lede":"构建好静态资源，一行命令把它交给云端。","cta.github":"查看 GitHub","cta.install":"安装 now",
-      "footer.desc":"把静态网站交给已有 provider 部署流程。不重写云端协议，只把流程收拢成一步。","footer.resources":"资源","footer.latest":"最新 Release","footer.nav":"导航","footer.tagline":"在午后阳光里部署静态网站。","footer.copy":"MIT License · © 2026 Will 保哥",
+      "footer.desc":"把静态网站交给已有 provider 部署流程。不重写云端协议，只把流程收拢成一步。","footer.resources":"资源","footer.latest":"最新 Release","footer.nav":"导航","footer.tagline":"在午后阳光里部署静态网站。","footer.copy":"MIT License · © 2026 <a href='https://www.facebook.com/will.fans/' target='_blank' rel='noopener'>Will 保哥</a>",
       "aria.theme":"切换主题","aria.lang":"选择语言","aria.menu":"菜单"
     },
     "en": {
       "nav.tagline":"Deploy static sites in one line","nav.why":"Why","nav.providers":"Platforms","nav.flow":"Flow","nav.config":"Config","nav.install":"Install",
-      "hero.eyebrow":"Static site deploy · v0.1","hero.title":"One line,<br>and your site is <em>live</em>.","hero.lede":"<code>now</code> wraps the deploy tools you already use — Firebase Hosting, Azure, and FTP. Point it at your build folder; it picks the right command, runs it, and hands you the URL. Deploy goes from a dozen steps to one.","hero.ctaPrimary":"Get started","copy.label":"Copy",
+      "hero.eyebrow":"Static site deploy","hero.title":"One line,<br>and your site is <em>live</em>.","hero.lede":"<code>now</code> wraps the deploy tools you already use — Firebase Hosting, Azure, and FTP. Point it at your build folder; it picks the right command, runs it, and hands you the URL. Deploy goes from a dozen steps to one.","hero.ctaPrimary":"Get started","copy.label":"Copy",
       "hero.meta1":"macOS Apple / Intel","hero.meta2":"Linux x64","hero.meta3":"Windows x64","hero.meta4":"SHA-256 verified",
       "why.eyebrow":"Why now","why.title":"No cloud gymnastics.<br>Just one command, then done.",
       "why.1.h":"It doesn't reinvent the cloud","why.1.p":"now doesn't rewrite Firebase, Azure, or FTP. It leans on the CLIs you already trust — your logins and permissions just work, no re-setup.",
@@ -96,12 +96,12 @@
       "install.win.p":"Installs to <code>$env:LOCALAPPDATA\\now\\bin</code> by default. Override with <code>-InstallDir</code>.",
       "install.manual.p":"Download the archive for your platform and its matching <code>.sha256</code>, verify the checksum, then extract and drop <code>now</code> or <code>now.exe</code> into a folder on your PATH.",
       "cta.title":"Ready to ship?","cta.lede":"Build your static assets, then hand them to the cloud in one line.","cta.github":"View on GitHub","cta.install":"Install now",
-      "footer.desc":"Hands static sites to your existing provider deploy flows. It doesn't rewrite the cloud — it just folds the steps into one.","footer.resources":"Resources","footer.latest":"Latest release","footer.nav":"Navigation","footer.tagline":"Shipping static sites in the afternoon light.","footer.copy":"MIT License · © 2026 Will",
+      "footer.desc":"Hands static sites to your existing provider deploy flows. It doesn't rewrite the cloud — it just folds the steps into one.","footer.resources":"Resources","footer.latest":"Latest release","footer.nav":"Navigation","footer.tagline":"Shipping static sites in the afternoon light.","footer.copy":"MIT License · © 2026 <a href='https://www.facebook.com/will.fans/' target='_blank' rel='noopener'>Will</a>",
       "aria.theme":"Toggle theme","aria.lang":"Language","aria.menu":"Menu"
     },
     "ja": {
       "nav.tagline":"静的サイトを一行でデプロイ","nav.why":"目的","nav.providers":"対応プラットフォーム","nav.flow":"流れ","nav.config":"設定","nav.install":"インストール",
-      "hero.eyebrow":"静的サイトデプロイ · v0.1","hero.title":"一行のコマンドで、<br>静的サイトを<em>クラウドへ</em>。","hero.lede":"<code>now</code> は Firebase Hosting・Azure・FTP の既存デプロイ手順をまとめます。公開フォルダを選び、コマンドを組み立て、デプロイ後に URL を返します。いくつもの手順が、ひとつに。","hero.ctaPrimary":"はじめる","copy.label":"コピー",
+      "hero.eyebrow":"静的サイトデプロイ","hero.title":"一行のコマンドで、<br>静的サイトを<em>クラウドへ</em>。","hero.lede":"<code>now</code> は Firebase Hosting・Azure・FTP の既存デプロイ手順をまとめます。公開フォルダを選び、コマンドを組み立て、デプロイ後に URL を返します。いくつもの手順が、ひとつに。","hero.ctaPrimary":"はじめる","copy.label":"コピー",
       "hero.meta1":"macOS Apple / Intel","hero.meta2":"Linux x64","hero.meta3":"Windows x64","hero.meta4":"SHA-256 検証",
       "why.eyebrow":"why now","why.title":"クラウドを作り直さない。<br>デプロイをひとつにまとめるだけ。",
       "why.1.h":"車輪を再発明しない","why.1.p":"now は Firebase・Azure・FTP を書き直しません。すでに使っている CLI をそのまま活用します。ログインや権限もそのまま引き継げ、再設定は不要です。",
@@ -125,12 +125,12 @@
       "install.win.p":"既定で <code>$env:LOCALAPPDATA\\now\\bin</code> にインストールします。<code>-InstallDir</code> で上書きできます。",
       "install.manual.p":"該当プラットフォームの archive と同名の <code>.sha256</code> をダウンロードし、checksum を検証して解凍、<code>now</code> または <code>now.exe</code> を PATH の通ったディレクトリに置きます。",
       "cta.title":"準備はいい？","cta.lede":"静的アセットができたら、一行でクラウドへ。","cta.github":"GitHub を見る","cta.install":"now をインストール",
-      "footer.desc":"静的サイトを既存のプロバイダでデプロイします。クラウドを作り直さず、手順をひとつにまとめるだけ。","footer.resources":"リソース","footer.latest":"最新 Release","footer.nav":"ナビゲーション","footer.tagline":"午後の光の中で静的サイトをデプロイ。","footer.copy":"MIT License · © 2026 Will",
+      "footer.desc":"静的サイトを既存のプロバイダでデプロイします。クラウドを作り直さず、手順をひとつにまとめるだけ。","footer.resources":"リソース","footer.latest":"最新 Release","footer.nav":"ナビゲーション","footer.tagline":"午後の光の中で静的サイトをデプロイ。","footer.copy":"MIT License · © 2026 <a href='https://www.facebook.com/will.fans/' target='_blank' rel='noopener'>Will</a>",
       "aria.theme":"テーマ切替","aria.lang":"言語","aria.menu":"メニュー"
     },
     "ko": {
       "nav.tagline":"정적 사이트 한 줄 배포","nav.why":"왜","nav.providers":"지원 플랫폼","nav.flow":"흐름","nav.config":"설정","nav.install":"설치",
-      "hero.eyebrow":"정적 사이트 배포 · v0.1","hero.title":"한 줄 명령으로,<br>정적 사이트를 <em>클라우드로</em>.","hero.lede":"<code>now</code>는 Firebase Hosting·Azure·FTP의 기존 배포 흐름을 하나로 묶습니다. 폴더를 고르고, 명령을 조립하고, 배포 뒤 URL을 돌려줍니다. 여러 단계가 한 단계로.","hero.ctaPrimary":"시작하기","copy.label":"복사",
+      "hero.eyebrow":"정적 사이트 배포","hero.title":"한 줄 명령으로,<br>정적 사이트를 <em>클라우드로</em>.","hero.lede":"<code>now</code>는 Firebase Hosting·Azure·FTP의 기존 배포 흐름을 하나로 묶습니다. 폴더를 고르고, 명령을 조립하고, 배포 뒤 URL을 돌려줍니다. 여러 단계가 한 단계로.","hero.ctaPrimary":"시작하기","copy.label":"복사",
       "hero.meta1":"macOS Apple / Intel","hero.meta2":"Linux x64","hero.meta3":"Windows x64","hero.meta4":"SHA-256 검증",
       "why.eyebrow":"왜 now인가","why.title":"클라우드를 다시 만들지 않고,<br>배포만 한 단계로.",
       "why.1.h":"바퀴를 재발명하지 않습니다","why.1.p":"now는 Firebase·Azure·FTP를 다시 구현하지 않고, 이미 쓰는 CLI에 올라탑니다. 기존 로그인과 권한도 그대로 쓰고, 다시 설정할 필요가 없습니다.",
@@ -154,7 +154,7 @@
       "install.win.p":"기본적으로 <code>$env:LOCALAPPDATA\\now\\bin</code>에 설치합니다. <code>-InstallDir</code>로 덮어쓸 수 있습니다.",
       "install.manual.p":"해당 플랫폼의 archive와 같은 이름의 <code>.sha256</code>을 내려받아, checksum을 검증한 뒤 압축을 풀고 <code>now</code> 또는 <code>now.exe</code>를 PATH에 있는 디렉터리에 둡니다.",
       "cta.title":"배포할 준비 끝?","cta.lede":"정적 자산이 준비되면, 한 줄로 클라우드로.","cta.github":"GitHub 보기","cta.install":"now 설치",
-      "footer.desc":"정적 사이트를 기존 provider 배포 흐름에 맡깁니다. 클라우드를 다시 만들지 않고, 단계만 하나로.","footer.resources":"리소스","footer.latest":"최신 Release","footer.nav":"탐색","footer.tagline":"오후의 햇살 속에서 정적 사이트를 배포합니다.","footer.copy":"MIT License · © 2026 Will",
+      "footer.desc":"정적 사이트를 기존 provider 배포 흐름에 맡깁니다. 클라우드를 다시 만들지 않고, 단계만 하나로.","footer.resources":"리소스","footer.latest":"최신 Release","footer.nav":"탐색","footer.tagline":"오후의 햇살 속에서 정적 사이트를 배포합니다.","footer.copy":"MIT License · © 2026 <a href='https://www.facebook.com/will.fans/' target='_blank' rel='noopener'>Will</a>",
       "aria.theme":"테마 전환","aria.lang":"언어","aria.menu":"메뉴"
     }
   };
@@ -203,9 +203,9 @@
     if (!T[lang]) lang = "zh-TW";
     var dict = T[lang];
     html.setAttribute("lang", lang);
-    $all("[data-i18n]").forEach(function (el) {
-      var k = el.getAttribute("data-i18n");
-      if (dict[k] != null) el.innerHTML = dict[k];
+    $all("[data-i18n],[data-i18n-html]").forEach(function (el) {
+      var k = el.getAttribute("data-i18n") || el.getAttribute("data-i18n-html");
+      if (k != null && dict[k] != null) el.innerHTML = dict[k];
     });
     var cur = $("#langCur");
     if (cur) cur.textContent = SHORT[lang] || lang;
