@@ -12,6 +12,7 @@ fn now_cmd(config_home: &TempDir) -> Command {
     let mut command = Command::cargo_bin("now").unwrap();
     command.env("NOW_CONFIG_HOME", config_home.path());
     command.env_remove("NOW_AZURE_BLOB_SAS_URL");
+    command.env_remove("SWA_CLI_DEPLOYMENT_TOKEN");
     command
 }
 
@@ -50,6 +51,65 @@ fn help_is_available() {
         .assert()
         .success()
         .stdout(predicate::str::contains("Deploy static sites"));
+}
+
+#[test]
+fn verbose_dry_run_reports_diagnostics_and_full_external_command() {
+    let site = TempDir::new().unwrap();
+    let config_home = TempDir::new().unwrap();
+    site.child("public/index.html").write_str("ok").unwrap();
+    site.child(".now.json")
+        .write_str(r#"{"provider":"firebase-hosting"}"#)
+        .unwrap();
+
+    now_cmd(&config_home)
+        .current_dir(site.path())
+        .args(["deploy", "--verbose", "--dry-run"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "firebase --debug deploy --only hosting",
+        ))
+        .stderr(predicate::str::contains("[verbose] Project root:"))
+        .stderr(predicate::str::contains(
+            "[verbose] External command: firebase --debug deploy --only hosting",
+        ));
+}
+
+#[test]
+fn verbose_flag_works_with_default_now_deploy_command() {
+    let site = TempDir::new().unwrap();
+    let config_home = TempDir::new().unwrap();
+    let bin_dir = TempDir::new().unwrap();
+    site.child("public/index.html").write_str("ok").unwrap();
+    site.child(".now.json")
+        .write_str(r#"{"provider":"firebase-hosting"}"#)
+        .unwrap();
+
+    #[cfg(unix)]
+    write_fake_cli(
+        &bin_dir,
+        "firebase",
+        "#!/bin/sh\nprintf 'provider-debug-log'\n",
+    );
+    #[cfg(windows)]
+    write_fake_cli(
+        &bin_dir,
+        "firebase",
+        "@echo off\r\n<nul set /p =provider-debug-log\r\n",
+    );
+
+    now_cmd(&config_home)
+        .current_dir(site.path())
+        .env("PATH", path_with_fake_bin(&bin_dir))
+        .arg("--verbose")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("provider-debug-log").not())
+        .stderr(predicate::str::contains(
+            "[verbose] External command: firebase --debug deploy --only hosting",
+        ))
+        .stderr(predicate::str::contains("provider-debug-log"));
 }
 
 #[test]
@@ -132,18 +192,93 @@ fn config_set_azure_blob_sas_url_writes_env_file_and_env_name() {
 }
 
 #[test]
-fn init_creates_local_config() {
+fn init_runs_interactive_setup_without_deploying() {
     let site = TempDir::new().unwrap();
     let config_home = TempDir::new().unwrap();
 
     now_cmd(&config_home)
         .current_dir(site.path())
         .arg("init")
+        .write_stdin("1\nhttps://example.web.app\n\nmy-project\n\n")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Created"));
+        .stdout(predicate::str::contains("Choose a provider"))
+        .stdout(predicate::str::contains("Configuration complete"))
+        .stdout(predicate::str::contains("Continuing with deployment").not());
 
-    site.child(".now.json").assert(predicate::path::exists());
+    let config: Value =
+        serde_json::from_str(&std::fs::read_to_string(site.path().join(".now.json")).unwrap())
+            .unwrap();
+    assert_eq!(
+        config.pointer("/provider").and_then(Value::as_str),
+        Some("firebase-hosting")
+    );
+    assert_eq!(
+        config.pointer("/firebase/project").and_then(Value::as_str),
+        Some("my-project")
+    );
+}
+
+#[test]
+fn init_existing_config_prompts_and_keeps_it_when_declined() {
+    let site = TempDir::new().unwrap();
+    let config_home = TempDir::new().unwrap();
+    let original = r#"{
+  "provider": "firebase-hosting"
+}
+"#;
+    site.child(".now.json").write_str(original).unwrap();
+
+    now_cmd(&config_home)
+        .current_dir(site.path())
+        .arg("init")
+        .write_stdin("n\n")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "Reconfigure and overwrite existing config? [y/N]",
+        ))
+        .stdout(predicate::str::contains("Kept"));
+
+    assert_eq!(
+        std::fs::read_to_string(site.path().join(".now.json")).unwrap(),
+        original
+    );
+}
+
+#[test]
+fn init_existing_config_reconfigures_it_when_confirmed() {
+    let site = TempDir::new().unwrap();
+    let config_home = TempDir::new().unwrap();
+    site.child(".now.json")
+        .write_str(
+            r#"{
+  "provider": "firebase-hosting"
+}
+"#,
+        )
+        .unwrap();
+
+    now_cmd(&config_home)
+        .current_dir(site.path())
+        .arg("init")
+        .write_stdin("y\n\n\n\n\n\n")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "Reconfigure and overwrite existing config? [y/N]",
+        ))
+        .stdout(predicate::str::contains("Choose a provider"))
+        .stdout(predicate::str::contains("Configuration complete"))
+        .stdout(predicate::str::contains("Continuing with deployment").not());
+
+    let config: Value =
+        serde_json::from_str(&std::fs::read_to_string(site.path().join(".now.json")).unwrap())
+            .unwrap();
+    assert_eq!(
+        config.pointer("/provider").and_then(Value::as_str),
+        Some("firebase-hosting")
+    );
 }
 
 #[test]
@@ -397,6 +532,50 @@ fn azure_static_web_app_provider_accepts_display_name() {
         .success()
         .stdout(predicate::str::contains("Provider: Azure Static Web App"))
         .stdout(predicate::str::contains("swa deploy"));
+}
+
+#[test]
+fn azure_static_web_app_deploy_reads_token_from_env_file() {
+    let site = TempDir::new().unwrap();
+    let config_home = TempDir::new().unwrap();
+    let bin_dir = TempDir::new().unwrap();
+    site.child("public/index.html").write_str("ok").unwrap();
+    site.child(".now.json")
+        .write_str(
+            r#"{
+  "provider": "azure-static-web-app",
+  "azure_swa": {
+    "deployment_token_env": "MY_SWA_TOKEN"
+  }
+}
+"#,
+        )
+        .unwrap();
+    site.child(".env")
+        .write_str("MY_SWA_TOKEN=token-from-dotenv\n")
+        .unwrap();
+
+    #[cfg(unix)]
+    write_fake_cli(
+        &bin_dir,
+        "swa",
+        "#!/bin/sh\nprintf '%s' \"$SWA_CLI_DEPLOYMENT_TOKEN\"\n",
+    );
+    #[cfg(windows)]
+    write_fake_cli(
+        &bin_dir,
+        "swa",
+        "@echo off\r\n<nul set /p =%SWA_CLI_DEPLOYMENT_TOKEN%\r\n",
+    );
+
+    now_cmd(&config_home)
+        .current_dir(site.path())
+        .env_remove("MY_SWA_TOKEN")
+        .env("PATH", path_with_fake_bin(&bin_dir))
+        .arg("deploy")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("token-from-dotenv"));
 }
 
 #[test]

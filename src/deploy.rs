@@ -1,5 +1,8 @@
 use crate::azure_blob::{display_upload_command, upload_directory};
-use crate::config::{NowConfig, ProviderKind, merged_config_value, parse_config};
+use crate::config::{
+    NowConfig, ProviderKind, global_config_path, local_config_path, merged_config_value,
+    parse_config, read_json_file, set_key, write_json_file,
+};
 use crate::env_file::{EnvFile, read_local_env};
 use crate::fs_rules::is_excluded_path;
 use crate::onboarding::run_first_run_setup;
@@ -8,7 +11,7 @@ use anyhow::{Context, Result, bail};
 use serde::Serialize;
 use serde_json::json;
 use std::fs;
-use std::io::{self, IsTerminal, Write};
+use std::io::{self, BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::TempDir;
@@ -22,6 +25,7 @@ pub struct DeployRequest {
     pub provider: Option<ProviderKind>,
     pub dry_run: bool,
     pub json: bool,
+    pub verbose: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -48,6 +52,24 @@ pub struct PreparedSource {
 }
 
 pub fn execute_deploy(request: DeployRequest) -> Result<()> {
+    verbose_log(
+        request.verbose,
+        format_args!("Project root: {}", request.cwd.display()),
+    );
+    verbose_log(
+        request.verbose,
+        format_args!(
+            "Local config: {}",
+            local_config_path(&request.cwd).display()
+        ),
+    );
+    if request.verbose {
+        verbose_log(
+            true,
+            format_args!("Global config: {}", global_config_path()?.display()),
+        );
+    }
+
     let mut merged_value = merged_config_value(&request.cwd, request.provider)?;
     let mut config = parse_config(merged_value)?;
     let provider = match config.provider {
@@ -69,8 +91,9 @@ pub fn execute_deploy(request: DeployRequest) -> Result<()> {
             bail!("provider is not configured; use --provider or set provider in .now.json");
         }
     };
+    verbose_log(request.verbose, format_args!("Provider: {provider}"));
 
-    let local_env = if provider == ProviderKind::AzureBlob {
+    let local_env = if matches!(provider, ProviderKind::AzureBlob | ProviderKind::AzureSwa) {
         Some(read_local_env(&request.cwd)?)
     } else {
         None
@@ -81,12 +104,29 @@ pub fn execute_deploy(request: DeployRequest) -> Result<()> {
         request.path_was_explicit,
         config.source.as_deref(),
     )?;
-    if selection.mode == SourceMode::CurrentDirectoryWithExcludes
-        && !request.dry_run
-        && !request.json
-        && io::stdin().is_terminal()
-        && prompt_create_public_dir()?
-    {
+    verbose_log(
+        request.verbose,
+        format_args!(
+            "Source selection: mode={:?}, path={}, excludes={}",
+            selection.mode,
+            selection.source.display(),
+            selection.excludes_enabled
+        ),
+    );
+    let move_publishable_files =
+        if selection.mode == SourceMode::CurrentDirectoryWithExcludes && !request.dry_run {
+            match config.move_publishable_files_to_public {
+                Some(choice) => Some(choice),
+                None if !request.json && io::stdin().is_terminal() => {
+                    Some(prompt_create_public_dir(&request.cwd)?)
+                }
+                None => None,
+            }
+        } else {
+            None
+        };
+
+    if move_publishable_files == Some(true) {
         move_publishable_files_to_public(&request.cwd)?;
         selection = SourceSelection {
             project_root: request.cwd.clone(),
@@ -97,10 +137,18 @@ pub fn execute_deploy(request: DeployRequest) -> Result<()> {
     }
 
     let prepared = prepare_source(&selection)?;
+    verbose_log(
+        request.verbose,
+        format_args!("Prepared source: {}", prepared.path.display()),
+    );
     let default_url = choose_default_url(&config, provider, local_env.as_ref(), &prepared.path);
 
     if provider == ProviderKind::AzureBlob {
         let command = display_upload_command(&config, local_env.as_ref(), &prepared.path)?;
+        verbose_log(
+            request.verbose,
+            format_args!("Built-in deployment: {command}"),
+        );
         if request.dry_run {
             print_deploy_summary(
                 &selection,
@@ -114,7 +162,8 @@ pub fn execute_deploy(request: DeployRequest) -> Result<()> {
             return Ok(());
         }
 
-        let upload_summary = upload_directory(&config, local_env.as_ref(), &prepared.path)?;
+        let upload_summary =
+            upload_directory(&config, local_env.as_ref(), &prepared.path, request.verbose)?;
         print_deploy_summary(
             &selection,
             &prepared.path,
@@ -133,7 +182,27 @@ pub fn execute_deploy(request: DeployRequest) -> Result<()> {
         return Ok(());
     }
 
-    let command = build_provider_command(provider, &config, &prepared.path)?;
+    let command = build_provider_command(provider, &config, &prepared.path, request.verbose)?;
+    verbose_log(
+        request.verbose,
+        format_args!("External command: {}", command.execution_line()),
+    );
+    verbose_log(
+        request.verbose,
+        format_args!(
+            "Required environment variables: {}",
+            command.required_env.join(", ")
+        ),
+    );
+    if request.verbose && !command.env_mappings.is_empty() {
+        let mappings = command
+            .env_mappings
+            .iter()
+            .map(|(target, source)| format!("{target} <- {source}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        verbose_log(true, format_args!("Environment mappings: {mappings}"));
+    }
 
     if request.dry_run {
         print_deploy_summary(
@@ -156,9 +225,9 @@ pub fn execute_deploy(request: DeployRequest) -> Result<()> {
             provider_install_hint(provider)
         );
     }
-    command.validate_environment()?;
+    command.validate_environment(local_env.as_ref())?;
 
-    run_provider_command(&command, &request.cwd)?;
+    run_provider_command(&command, &request.cwd, local_env.as_ref(), request.verbose)?;
 
     print_deploy_summary(
         &selection,
@@ -175,6 +244,8 @@ pub fn execute_deploy(request: DeployRequest) -> Result<()> {
 fn run_provider_command(
     command: &crate::provider::ProviderCommand,
     request_cwd: &Path,
+    env_file: Option<&crate::env_file::EnvFile>,
+    verbose: bool,
 ) -> Result<()> {
     let mut process = Command::new(&command.program);
     process.args(&command.args);
@@ -183,20 +254,57 @@ fn run_provider_command(
     } else {
         process.current_dir(request_cwd);
     }
-    command.apply_environment(&mut process)?;
+    command.apply_environment(&mut process, env_file)?;
+    let working_directory = command.cwd.as_deref().unwrap_or(request_cwd);
+    verbose_log(
+        verbose,
+        format_args!(
+            "External working directory: {}",
+            working_directory.display()
+        ),
+    );
 
     let output = process
         .output()
         .with_context(|| format!("failed to run provider CLI: {}", command.program))?;
 
-    io::stdout().write_all(&output.stdout)?;
-    io::stderr().write_all(&output.stderr)?;
+    if verbose {
+        let mut stderr = io::stderr().lock();
+        if !output.stdout.is_empty() {
+            writeln!(stderr, "[verbose] External stdout:")?;
+            stderr.write_all(&output.stdout)?;
+            if !output.stdout.ends_with(b"\n") {
+                writeln!(stderr)?;
+            }
+        }
+        if !output.stderr.is_empty() {
+            writeln!(stderr, "[verbose] External stderr:")?;
+            stderr.write_all(&output.stderr)?;
+            if !output.stderr.ends_with(b"\n") {
+                writeln!(stderr)?;
+            }
+        }
+    } else {
+        io::stdout().write_all(&output.stdout)?;
+        io::stderr().write_all(&output.stderr)?;
+    }
+
+    verbose_log(
+        verbose,
+        format_args!("External exit status: {}", output.status),
+    );
 
     if !output.status.success() {
         bail!("provider command failed with status {}", output.status);
     }
 
     Ok(())
+}
+
+fn verbose_log(enabled: bool, message: std::fmt::Arguments<'_>) {
+    if enabled {
+        eprintln!("[verbose] {message}");
+    }
 }
 
 fn should_prompt_first_run(request: &DeployRequest) -> bool {
@@ -418,15 +526,41 @@ fn copy_filtered(source: &Path, destination: &Path) -> Result<()> {
     Ok(())
 }
 
-fn prompt_create_public_dir() -> Result<bool> {
-    print!(
+fn prompt_create_public_dir(root: &Path) -> Result<bool> {
+    let stdin = io::stdin();
+    let mut input = io::BufReader::new(stdin.lock());
+    let stdout = io::stdout();
+    let mut output = stdout.lock();
+    prompt_and_remember_move_publishable_files(root, &mut input, &mut output)
+}
+
+fn prompt_and_remember_move_publishable_files<R: BufRead, W: Write>(
+    root: &Path,
+    input: &mut R,
+    output: &mut W,
+) -> Result<bool> {
+    write!(
+        output,
         "No dist/, build/, or public/ directory was found. Move publishable files into public/? [y/N] "
-    );
-    io::stdout().flush()?;
+    )?;
+    output.flush()?;
 
     let mut answer = String::new();
-    io::stdin().read_line(&mut answer)?;
-    Ok(matches!(answer.trim(), "y" | "Y" | "yes" | "YES"))
+    input.read_line(&mut answer)?;
+    let choice = matches!(answer.trim(), "y" | "Y" | "yes" | "YES");
+    remember_move_publishable_files_choice(root, choice)?;
+    Ok(choice)
+}
+
+fn remember_move_publishable_files_choice(root: &Path, choice: bool) -> Result<()> {
+    let path = local_config_path(root);
+    let mut config = read_json_file(&path)?;
+    set_key(
+        &mut config,
+        "move_publishable_files_to_public",
+        json!(choice),
+    )?;
+    write_json_file(&path, &config)
 }
 
 fn move_publishable_files_to_public(root: &Path) -> Result<()> {
@@ -476,7 +610,7 @@ fn print_deploy_summary(
     println!("Source: {}", prepared_path.display());
     println!("Source mode: {:?}", selection.mode);
     if selection.excludes_enabled {
-        println!("Excluded: .now.json, .git/, node_modules/, target/, temp files");
+        println!("Excluded: .now.json, .env, .env.*, .git/, node_modules/, target/, temp files");
     }
     println!("Command: {command}");
     if dry_run {
@@ -531,10 +665,41 @@ mod tests {
     }
 
     #[test]
+    fn remembers_publishable_files_choice_in_local_config() {
+        let temp = TempDir::new().unwrap();
+        temp.child(".now.json")
+            .write_str(r#"{"provider":"firebase-hosting"}"#)
+            .unwrap();
+        let mut input = std::io::Cursor::new(b"n\n");
+        let mut output = Vec::new();
+
+        let choice =
+            prompt_and_remember_move_publishable_files(temp.path(), &mut input, &mut output)
+                .unwrap();
+
+        assert!(!choice);
+        assert!(
+            String::from_utf8(output)
+                .unwrap()
+                .contains("Move publishable files")
+        );
+        let config = crate::config::read_json_file(&temp.path().join(".now.json")).unwrap();
+        assert_eq!(
+            crate::config::get_key(&config, "provider"),
+            Some(&json!("firebase-hosting"))
+        );
+        assert_eq!(
+            crate::config::get_key(&config, "move_publishable_files_to_public"),
+            Some(&json!(false))
+        );
+    }
+
+    #[test]
     fn staged_source_excludes_runtime_files() {
         let temp = TempDir::new().unwrap();
         temp.child("index.html").write_str("ok").unwrap();
         temp.child(".now.json").write_str("{}").unwrap();
+        temp.child(".env").write_str("SECRET=value").unwrap();
         temp.child("node_modules/pkg/index.js")
             .write_str("skip")
             .unwrap();
@@ -544,7 +709,21 @@ mod tests {
 
         assert!(prepared.path.join("index.html").is_file());
         assert!(!prepared.path.join(".now.json").exists());
+        assert!(!prepared.path.join(".env").exists());
         assert!(!prepared.path.join("node_modules").exists());
+    }
+
+    #[test]
+    fn moving_publishable_files_keeps_env_file_outside_public() {
+        let temp = TempDir::new().unwrap();
+        temp.child("index.html").write_str("ok").unwrap();
+        temp.child(".env").write_str("SECRET=value").unwrap();
+
+        move_publishable_files_to_public(temp.path()).unwrap();
+
+        assert!(temp.path().join("public/index.html").is_file());
+        assert!(temp.path().join(".env").is_file());
+        assert!(!temp.path().join("public/.env").exists());
     }
 
     #[test]

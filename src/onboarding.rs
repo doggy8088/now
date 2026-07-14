@@ -1,6 +1,7 @@
 use crate::config::{
-    DEFAULT_AZURE_BLOB_SAS_URL_ENV, ProviderKind, default_config, get_key, local_config_path,
-    merge_values, read_json_file, remove_key, set_key, write_json_file,
+    DEFAULT_AZURE_BLOB_SAS_URL_ENV, DEFAULT_AZURE_SWA_DEPLOYMENT_TOKEN_ENV, ProviderKind,
+    default_config, get_key, local_config_path, merge_values, read_json_file, remove_key, set_key,
+    write_json_file,
 };
 use crate::env_file::{local_env_path, validate_env_name, write_env_value};
 use anyhow::{Context, Result, bail};
@@ -14,10 +15,6 @@ pub fn run_first_run_setup<R: BufRead, W: Write>(
     output: &mut W,
 ) -> Result<ProviderKind> {
     let path = local_config_path(root);
-    let existing = read_json_file(&path)?;
-    let mut config = default_config();
-    merge_values(&mut config, existing);
-
     writeln!(output, "No provider is configured for now.")?;
     writeln!(
         output,
@@ -29,7 +26,46 @@ pub fn run_first_run_setup<R: BufRead, W: Write>(
     )?;
     writeln!(output)?;
 
-    let provider = prompt_provider(input, output)?;
+    let provider = run_setup(root, &path, input, output)?;
+    writeln!(output, "Continuing with deployment.")?;
+
+    Ok(provider)
+}
+
+pub fn run_init_setup<R: BufRead, W: Write>(
+    root: &Path,
+    path: &Path,
+    input: &mut R,
+    output: &mut W,
+) -> Result<ProviderKind> {
+    writeln!(output, "Configure now interactively.")?;
+    writeln!(
+        output,
+        "Keep tokens, passwords, and account keys in provider login state or environment variables."
+    )?;
+    writeln!(output)?;
+
+    let provider = run_setup(root, path, input, output)?;
+    writeln!(output, "Configuration complete. No deployment was started.")?;
+
+    Ok(provider)
+}
+
+fn run_setup<R: BufRead, W: Write>(
+    root: &Path,
+    path: &Path,
+    input: &mut R,
+    output: &mut W,
+) -> Result<ProviderKind> {
+    let config_existed = path.exists();
+    let existing = read_json_file(path)?;
+    let mut config = default_config();
+    merge_values(&mut config, existing);
+    let configured_provider = get_string(&config, "provider")
+        .as_deref()
+        .and_then(ProviderKind::parse);
+
+    let provider = prompt_provider(input, output, configured_provider)?;
     set_key(
         &mut config,
         "provider",
@@ -45,15 +81,17 @@ pub fn run_first_run_setup<R: BufRead, W: Write>(
         ProviderKind::AzureBlob => {
             env_secret = Some(prompt_azure_blob(root, input, output, &mut config)?);
         }
-        ProviderKind::AzureSwa => prompt_azure_swa(input, output, &mut config)?,
+        ProviderKind::AzureSwa => {
+            env_secret = Some(prompt_azure_swa(root, input, output, &mut config)?);
+        }
         ProviderKind::Ftp => prompt_ftp(input, output, &mut config)?,
     }
 
-    write_json_file(&path, &config)?;
-    if let Some((env_name, sas_url)) = env_secret {
+    write_json_file(path, &config)?;
+    if let Some((env_name, secret_value)) = env_secret {
         let env_path = local_env_path(root);
         let exists = env_path.exists();
-        write_env_value(&env_path, &env_name, &sas_url)?;
+        write_env_value(&env_path, &env_name, &secret_value)?;
         if exists {
             writeln!(output, "Updated {}", env_path.display())?;
         } else {
@@ -61,13 +99,17 @@ pub fn run_first_run_setup<R: BufRead, W: Write>(
         }
     }
     writeln!(output)?;
-    writeln!(output, "Created {}", path.display())?;
-    writeln!(output, "Continuing with deployment.")?;
+    let action = if config_existed { "Updated" } else { "Created" };
+    writeln!(output, "{action} {}", path.display())?;
 
     Ok(provider)
 }
 
-fn prompt_provider<R: BufRead, W: Write>(input: &mut R, output: &mut W) -> Result<ProviderKind> {
+fn prompt_provider<R: BufRead, W: Write>(
+    input: &mut R,
+    output: &mut W,
+    configured: Option<ProviderKind>,
+) -> Result<ProviderKind> {
     writeln!(output, "Choose a provider:")?;
     writeln!(output, "  1. Firebase Hosting")?;
     writeln!(output, "  2. Azure Storage Blob")?;
@@ -75,8 +117,13 @@ fn prompt_provider<R: BufRead, W: Write>(input: &mut R, output: &mut W) -> Resul
     writeln!(output, "  4. Any Website (FTP)")?;
 
     loop {
-        let answer = prompt(input, output, "Provider [Firebase Hosting]: ")?;
-        let answer = answer.as_deref().unwrap_or("firebase-hosting").trim();
+        let default = configured.unwrap_or(ProviderKind::Firebase);
+        let prompt_text = format!("Provider [{}]: ", default.display_name());
+        let answer = prompt(input, output, &prompt_text)?;
+        let answer = answer.as_deref().map(str::trim).unwrap_or_default();
+        if answer.is_empty() {
+            return Ok(default);
+        }
         if let Some(provider) = parse_provider_choice(answer) {
             return Ok(provider);
         }
@@ -188,10 +235,15 @@ fn prompt_azure_blob<R: BufRead, W: Write>(
 }
 
 fn prompt_azure_swa<R: BufRead, W: Write>(
+    root: &Path,
     input: &mut R,
     output: &mut W,
     config: &mut Value,
-) -> Result<()> {
+) -> Result<(String, String)> {
+    writeln!(
+        output,
+        "Azure Static Web App deployment token will be saved to .env, while .now.json only stores the environment variable name."
+    )?;
     let app_name = prompt_optional(
         input,
         output,
@@ -217,16 +269,33 @@ fn prompt_azure_swa<R: BufRead, W: Write>(
         "Azure Static Web App token environment variable",
         get_string(config, "azure_swa.deployment_token_env")
             .as_deref()
-            .or(Some("SWA_CLI_DEPLOYMENT_TOKEN")),
+            .or(Some(DEFAULT_AZURE_SWA_DEPLOYMENT_TOKEN_ENV)),
     )?
-    .unwrap_or_else(|| "SWA_CLI_DEPLOYMENT_TOKEN".to_owned());
+    .unwrap_or_else(|| DEFAULT_AZURE_SWA_DEPLOYMENT_TOKEN_ENV.to_owned());
+    validate_env_name(&token_env)?;
     set_key(
         config,
         "azure_swa.deployment_token_env",
-        Value::String(token_env),
+        Value::String(token_env.clone()),
     )?;
 
-    Ok(())
+    let local_env = crate::env_file::read_local_env(root).ok();
+    let existing_token = crate::env_file::env_value(&token_env, local_env.as_ref());
+    let token = if let Some(existing) = existing_token {
+        let answer = prompt(
+            input,
+            output,
+            "Azure Static Web App deployment token [configured]: ",
+        )?;
+        match answer {
+            Some(answer) if !answer.trim().is_empty() => answer.trim().to_owned(),
+            _ => existing,
+        }
+    } else {
+        prompt_required(input, output, "Azure Static Web App deployment token", None)?
+    };
+
+    Ok((token_env, token))
 }
 
 fn prompt_ftp<R: BufRead, W: Write>(
@@ -473,5 +542,32 @@ mod tests {
 
         let output = String::from_utf8(output).unwrap();
         assert!(output.contains("https://acct.blob.core.windows.net/$web?<redacted>"));
+    }
+
+    #[test]
+    fn first_run_setup_writes_azure_swa_deployment_token_to_env_file() {
+        let temp = TempDir::new().unwrap();
+        let answers = b"3\n\n\nmy-app\n\n\nsecret-deployment-token\n";
+        let mut input = Cursor::new(answers.as_slice());
+        let mut output = Vec::new();
+
+        let provider = run_first_run_setup(temp.path(), &mut input, &mut output).unwrap();
+        let config = read_json_file(&local_config_path(temp.path())).unwrap();
+
+        assert_eq!(provider, ProviderKind::AzureSwa);
+        assert_eq!(
+            get_key(&config, "azure_swa.deployment_token_env"),
+            Some(&json!("SWA_CLI_DEPLOYMENT_TOKEN"))
+        );
+        assert_eq!(get_key(&config, "azure_swa.deployment_token"), None);
+
+        let env_text = std::fs::read_to_string(temp.path().join(".env")).unwrap();
+        assert!(env_text.contains("SWA_CLI_DEPLOYMENT_TOKEN="));
+        assert!(env_text.contains("secret-deployment-token"));
+
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains("deployment token"));
+        assert!(output.contains(".env"));
+        assert!(!output.contains("secret-deployment-token"));
     }
 }

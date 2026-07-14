@@ -7,6 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 pub const DEFAULT_AZURE_BLOB_SAS_URL_ENV: &str = "NOW_AZURE_BLOB_SAS_URL";
+pub const DEFAULT_AZURE_SWA_DEPLOYMENT_TOKEN_ENV: &str = "SWA_CLI_DEPLOYMENT_TOKEN";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProviderKind {
@@ -90,6 +91,7 @@ fn normalize_provider_name(value: &str) -> String {
 pub struct NowConfig {
     pub provider: Option<ProviderKind>,
     pub source: Option<String>,
+    pub move_publishable_files_to_public: Option<bool>,
     pub base_url: Option<String>,
     pub default_url: Option<String>,
     pub firebase: FirebaseConfig,
@@ -155,6 +157,7 @@ pub fn default_config() -> Value {
     json!({
         "provider": null,
         "source": null,
+        "move_publishable_files_to_public": null,
         "base_url": null,
         "default_url": null,
         "firebase": {
@@ -167,7 +170,7 @@ pub fn default_config() -> Value {
         },
         "azure_swa": {
             "environment": "production",
-            "deployment_token_env": "SWA_CLI_DEPLOYMENT_TOKEN"
+            "deployment_token_env": DEFAULT_AZURE_SWA_DEPLOYMENT_TOKEN_ENV
         },
         "ftp": {
             "host": null,
@@ -490,5 +493,15 @@ mod tests {
 
         let config = parse_config(json!({ "provider": "ftp" })).unwrap();
         assert_eq!(config.provider, Some(ProviderKind::Ftp));
+    }
+
+    #[test]
+    fn parses_remembered_publishable_files_choice() {
+        let config = parse_config(json!({
+            "move_publishable_files_to_public": false
+        }))
+        .unwrap();
+
+        assert_eq!(config.move_publishable_files_to_public, Some(false));
     }
 }

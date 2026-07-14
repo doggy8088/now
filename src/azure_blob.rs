@@ -51,11 +51,13 @@ pub fn upload_directory(
     config: &NowConfig,
     env_file: Option<&EnvFile>,
     source: &Path,
+    verbose: bool,
 ) -> Result<AzureBlobUploadSummary> {
     upload_directory_to_sas_url(
         &sas_url(config, env_file)?,
         config.azure_blob.prefix.as_deref(),
         source,
+        verbose,
     )
 }
 
@@ -83,6 +85,7 @@ pub fn upload_directory_to_sas_url(
     sas_url: &str,
     prefix: Option<&str>,
     source: &Path,
+    verbose: bool,
 ) -> Result<AzureBlobUploadSummary> {
     if !source.is_dir() {
         bail!(
@@ -102,12 +105,26 @@ pub fn upload_directory_to_sas_url(
 
         let relative = entry.path().strip_prefix(source)?;
         let url = blob_url_for_relative_path(sas_url, prefix, relative)?;
+        if verbose {
+            eprintln!(
+                "[verbose] Uploading blob: {} -> {}",
+                relative.display(),
+                mask_sas_url(url.as_str())?
+            );
+        }
         let body = fs::read(entry.path())
             .with_context(|| format!("failed to read {}", entry.path().display()))?;
         let content_type = content_type_for_path(entry.path());
 
         put_blob(&client, url, &body, content_type)
             .with_context(|| format!("failed to upload {}", relative.display()))?;
+        if verbose {
+            eprintln!(
+                "[verbose] Uploaded blob: {} bytes={}",
+                relative.display(),
+                body.len()
+            );
+        }
 
         summary.files += 1;
         summary.bytes += body.len() as u64;
@@ -331,7 +348,7 @@ mod tests {
         });
 
         let sas_url = format!("http://{address}/container?sv=1&sig=secret");
-        let summary = upload_directory_to_sas_url(&sas_url, None, site.path()).unwrap();
+        let summary = upload_directory_to_sas_url(&sas_url, None, site.path(), false).unwrap();
         handle.join().unwrap();
 
         assert_eq!(summary.files, 1);

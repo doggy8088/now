@@ -1,16 +1,18 @@
 use crate::azure_blob::display_upload_command;
 use crate::config::{
-    DEFAULT_AZURE_BLOB_SAS_URL_ENV, ProviderKind, default_config, get_key, global_config_path,
-    local_config_path, merged_config_value, parse_config, parse_config_value, read_json_file,
-    remove_key, secret_paths, set_key, write_json_file,
+    DEFAULT_AZURE_BLOB_SAS_URL_ENV, ProviderKind, get_key, global_config_path, local_config_path,
+    merged_config_value, parse_config, parse_config_value, read_json_file, remove_key,
+    secret_paths, set_key, write_json_file,
 };
 use crate::deploy::{DeployRequest, execute_deploy};
 use crate::env_file::{local_env_path, read_local_env, write_env_value};
+use crate::onboarding::run_init_setup;
 use crate::provider::{build_provider_command, program_available, provider_install_hint};
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
 use serde_json::Value;
 use std::ffi::OsString;
+use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
@@ -26,6 +28,12 @@ pub struct Cli {
 
     #[arg(value_name = "PATH")]
     path: Option<PathBuf>,
+
+    #[arg(
+        long,
+        help = "Show detailed diagnostics and enable provider debug logs"
+    )]
+    verbose: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -51,6 +59,12 @@ struct DeployArgs {
 
     #[arg(long)]
     json: bool,
+
+    #[arg(
+        long,
+        help = "Show detailed diagnostics and enable provider debug logs"
+    )]
+    verbose: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -138,6 +152,7 @@ fn execute(cli: Cli) -> Result<()> {
             provider: args.provider,
             dry_run: args.dry_run,
             json: args.json,
+            verbose: args.verbose,
         }),
         Some(Command::Init(scope)) => init_config(scope.write_scope(), &cwd),
         Some(Command::Config { command }) => execute_config(command, cwd),
@@ -148,6 +163,7 @@ fn execute(cli: Cli) -> Result<()> {
             provider: None,
             dry_run: false,
             json: false,
+            verbose: cli.verbose,
         }),
     }
 }
@@ -170,13 +186,34 @@ fn config_path(scope: ConfigWriteScope, cwd: &std::path::Path) -> Result<PathBuf
 }
 
 fn init_config(scope: ConfigWriteScope, cwd: &std::path::Path) -> Result<()> {
+    let stdin = io::stdin();
+    let mut input = io::BufReader::new(stdin.lock());
+    let stdout = io::stdout();
+    let mut output = stdout.lock();
+    init_config_with_io(scope, cwd, &mut input, &mut output)
+}
+
+fn init_config_with_io<R: BufRead, W: Write>(
+    scope: ConfigWriteScope,
+    cwd: &std::path::Path,
+    input: &mut R,
+    output: &mut W,
+) -> Result<()> {
     let path = config_path(scope, cwd)?;
     if path.exists() {
-        bail!("config already exists: {}", path.display());
+        writeln!(output, "Config already exists: {}", path.display())?;
+        write!(output, "Reconfigure and overwrite existing config? [y/N] ")?;
+        output.flush()?;
+
+        let mut answer = String::new();
+        input.read_line(&mut answer)?;
+        if !matches!(answer.trim(), "y" | "Y" | "yes" | "YES") {
+            writeln!(output, "Kept {}", path.display())?;
+            return Ok(());
+        }
     }
 
-    write_json_file(&path, &default_config())?;
-    println!("Created {}", path.display());
+    run_init_setup(cwd, &path, input, output)?;
     Ok(())
 }
 
@@ -284,7 +321,7 @@ fn doctor_config(cwd: &std::path::Path) -> Result<()> {
                 return Ok(());
             }
 
-            match build_provider_command(provider, &config, cwd) {
+            match build_provider_command(provider, &config, cwd, false) {
                 Ok(command) => {
                     println!("Command: {}", command.display_line());
                     if program_available(&command.required_cli) {

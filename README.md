@@ -77,10 +77,17 @@ now deploy dist
 
 第一次在互動式終端機執行 `now` 或 `now deploy`，且尚未設定 provider 時，CLI 會啟動首次設定流程，協助選擇 provider 並把非祕密設定寫入 `.now.json`。非互動式環境或 `--json` 模式不會啟動提示流程，會直接輸出缺少 provider 的錯誤。
 
-也可以手動建立設定：
+也可以明確啟動互動式設定精靈：
 
 ```sh
 now init
+```
+
+`now init` 只會設定 provider 與相關選項，不會執行發布。若設定檔已存在，CLI 會先詢問是否重新設定並覆寫；拒絕時會保留原檔，接受時則以既有值作為提示預設值。
+
+若只需修改單一設定，也可以使用：
+
+```sh
 now config set provider firebase-hosting
 ```
 
@@ -109,6 +116,7 @@ now 讀取兩種設定檔：
 {
   "provider": "firebase-hosting",
   "source": null,
+  "move_publishable_files_to_public": null,
   "base_url": "https://example.web.app",
   "default_url": null,
   "firebase": {
@@ -223,7 +231,9 @@ PUT https://mystorageaccount.blob.core.windows.net/$web/<file>?<sas-query>
 npm install -g @azure/static-web-apps-cli
 ```
 
-建議把 deployment token 放在環境變數：
+首次設定選擇 `Azure Static Web App` 時，會要求輸入 deployment token。實際權杖只會寫入 `.env`，`.now.json` 只保存環境變數名稱。部署時會優先讀取程序環境變數，未設定時再讀取專案的 `.env`。
+
+也可以自行把 deployment token 放在環境變數：
 
 ```sh
 export SWA_CLI_DEPLOYMENT_TOKEN=...
@@ -275,8 +285,15 @@ now config set ftp.remote_dir /public_html
 若三者都不存在：
 
 1. 互動式終端機會詢問是否把目前目錄的可發布檔案移到 `public/`。
-2. 若拒絕或處於非互動式環境，會部署目前目錄。
-3. 部署目前目錄時會排除 `.now.json`、`.git/`、`node_modules/`、`target/` 與暫存檔。
+2. 回答會寫入 `.now.json` 的 `move_publishable_files_to_public`，後續直接套用，不再重複詢問。
+3. 若拒絕或處於非互動式環境且尚無記憶選擇，會部署目前目錄。
+4. 部署目前目錄或移動檔案時，會排除 `.now.json`、`.env`、`.env.*`、`.git/`、`node_modules/`、`target/` 與暫存檔。
+
+若要清除記憶並讓 CLI 下次重新詢問：
+
+```sh
+now config set move_publishable_files_to_public null
+```
 
 指定 path 時會直接使用該目錄：
 
@@ -314,6 +331,27 @@ now deploy --dry-run --json
 now config get --global
 now config doctor
 ```
+
+### 詳細記錄
+
+部署時加入 `--verbose` 可顯示設定檔位置、provider、來源目錄判斷、準備後的部署目錄、外部命令工作目錄、完整命令與參數、環境變數映射名稱、外部命令輸出及結束狀態：
+
+```sh
+now --verbose
+now deploy --verbose
+now deploy dist --verbose
+```
+
+詳細記錄會輸出到 stderr，因此可與 `--json` 同時使用而不破壞 stdout 的 JSON。權杖、密碼與 SAS URL query 不會顯示。
+
+`--verbose` 也會開啟 provider 自身的偵錯模式：
+
+| Provider | 偵錯設定 |
+| --- | --- |
+| Firebase Hosting | `firebase --debug` |
+| Azure Static Web App | `swa --verbose silly` |
+| Any Website via FTP | `lftp -d` |
+| Azure Storage Blob | 顯示每個檔案的遮罩後目標 URL、大小與完成狀態 |
 
 * * *
 

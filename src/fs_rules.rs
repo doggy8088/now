@@ -23,7 +23,10 @@ pub fn is_excluded_relative(path: &Path) -> bool {
         return false;
     };
 
-    EXCLUDED_FILES.contains(&file_name.as_ref()) || is_temp_name(&file_name)
+    EXCLUDED_FILES.contains(&file_name.as_ref())
+        || file_name == ".env"
+        || file_name.starts_with(".env.")
+        || is_temp_name(&file_name)
 }
 
 fn is_temp_name(name: &str) -> bool {
@@ -45,6 +48,8 @@ mod tests {
         assert!(is_excluded_relative(Path::new(".now.json")));
         assert!(is_excluded_relative(Path::new("node_modules/pkg/index.js")));
         assert!(is_excluded_relative(Path::new("target/release/now")));
+        assert!(is_excluded_relative(Path::new(".env")));
+        assert!(is_excluded_relative(Path::new(".env.local")));
         assert!(is_excluded_relative(Path::new("index.html.tmp")));
         assert!(!is_excluded_relative(Path::new("public/index.html")));
     }

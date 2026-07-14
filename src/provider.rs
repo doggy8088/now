@@ -1,4 +1,5 @@
 use crate::config::{NowConfig, ProviderKind};
+use crate::env_file::{EnvFile, env_value};
 use anyhow::{Context, Result, bail};
 use std::env;
 use std::ffi::OsString;
@@ -66,15 +67,17 @@ impl ProviderCommand {
         )
     }
 
-    pub fn validate_environment(&self) -> Result<()> {
+    pub fn execution_line(&self) -> String {
+        shell_join(
+            std::iter::once(self.program.as_str()).chain(self.args.iter().map(String::as_str)),
+        )
+    }
+
+    pub fn validate_environment(&self, env_file: Option<&EnvFile>) -> Result<()> {
         let missing = self
             .required_env
             .iter()
-            .filter(|name| {
-                env::var(name.as_str())
-                    .map(|value| value.is_empty())
-                    .unwrap_or(true)
-            })
+            .filter(|name| env_value(name, env_file).is_none())
             .cloned()
             .collect::<Vec<_>>();
 
@@ -89,9 +92,19 @@ impl ProviderCommand {
         Ok(())
     }
 
-    pub fn apply_environment(&self, process: &mut std::process::Command) -> Result<()> {
+    pub fn apply_environment(
+        &self,
+        process: &mut std::process::Command,
+        env_file: Option<&EnvFile>,
+    ) -> Result<()> {
+        for name in &self.required_env {
+            let value = env_value(name, env_file)
+                .with_context(|| format!("missing required environment variable: {name}"))?;
+            process.env(name, value);
+        }
+
         for (target_name, source_name) in &self.env_mappings {
-            let value = env::var(source_name)
+            let value = env_value(source_name, env_file)
                 .with_context(|| format!("missing required environment variable: {source_name}"))?;
             process.env(target_name, value);
         }
@@ -103,20 +116,21 @@ pub fn build_provider_command(
     provider: ProviderKind,
     config: &NowConfig,
     source: &Path,
+    verbose: bool,
 ) -> Result<ProviderCommand> {
     match provider {
-        ProviderKind::Firebase => firebase_command(config),
+        ProviderKind::Firebase => firebase_command(config, verbose),
         ProviderKind::AzureBlob => {
             bail!(
                 "provider Azure Storage Blob uses built-in SAS URL upload and does not require a provider CLI"
             )
         }
-        ProviderKind::AzureSwa => azure_swa_command(config, source),
-        ProviderKind::Ftp => ftp_command(config, source),
+        ProviderKind::AzureSwa => azure_swa_command(config, source, verbose),
+        ProviderKind::Ftp => ftp_command(config, source, verbose),
     }
 }
 
-fn firebase_command(config: &NowConfig) -> Result<ProviderCommand> {
+fn firebase_command(config: &NowConfig, verbose: bool) -> Result<ProviderCommand> {
     let only = config
         .firebase
         .site
@@ -124,7 +138,11 @@ fn firebase_command(config: &NowConfig) -> Result<ProviderCommand> {
         .map(|site| format!("hosting:{site}"))
         .unwrap_or_else(|| "hosting".to_owned());
 
-    let mut args = vec!["deploy".to_owned(), "--only".to_owned(), only];
+    let mut args = Vec::new();
+    if verbose {
+        args.push("--debug".to_owned());
+    }
+    args.extend(["deploy".to_owned(), "--only".to_owned(), only]);
     if let Some(project) = non_empty(config.firebase.project.as_deref()) {
         args.extend(["--project".to_owned(), project.to_owned()]);
     }
@@ -137,17 +155,21 @@ fn firebase_command(config: &NowConfig) -> Result<ProviderCommand> {
     ))
 }
 
-fn azure_swa_command(config: &NowConfig, source: &Path) -> Result<ProviderCommand> {
+fn azure_swa_command(config: &NowConfig, source: &Path, verbose: bool) -> Result<ProviderCommand> {
     let environment = non_empty(config.azure_swa.environment.as_deref()).unwrap_or("production");
     let token_env = non_empty(config.azure_swa.deployment_token_env.as_deref())
-        .unwrap_or("SWA_CLI_DEPLOYMENT_TOKEN");
+        .unwrap_or(crate::config::DEFAULT_AZURE_SWA_DEPLOYMENT_TOKEN_ENV);
 
-    let mut args = vec![
+    let mut args = Vec::new();
+    if verbose {
+        args.extend(["--verbose".to_owned(), "silly".to_owned()]);
+    }
+    args.extend([
         "deploy".to_owned(),
         source.display().to_string(),
         "--env".to_owned(),
         environment.to_owned(),
-    ];
+    ]);
 
     if let Some(app_name) = non_empty(config.azure_swa.app_name.as_deref()) {
         args.extend(["--app-name".to_owned(), app_name.to_owned()]);
@@ -160,7 +182,7 @@ fn azure_swa_command(config: &NowConfig, source: &Path) -> Result<ProviderComman
     )
 }
 
-fn ftp_command(config: &NowConfig, source: &Path) -> Result<ProviderCommand> {
+fn ftp_command(config: &NowConfig, source: &Path, verbose: bool) -> Result<ProviderCommand> {
     let host = non_empty(config.ftp.host.as_deref())
         .context("ftp.host is required for provider Any Website (FTP)")?;
     let remote_dir = non_empty(config.ftp.remote_dir.as_deref()).unwrap_or("/");
@@ -172,11 +194,17 @@ fn ftp_command(config: &NowConfig, source: &Path) -> Result<ProviderCommand> {
         shell_quote(&source.display().to_string()),
         shell_quote(remote_dir)
     );
+    let debug_arg = if verbose { " -d" } else { "" };
     let script = format!(
-        "lftp -u \"${username_env}\",\"${password_env}\" {} -e {}",
+        "lftp{debug_arg} -u \"${username_env}\",\"${password_env}\" {} -e {}",
         shell_quote(host),
         shell_quote(&mirror_command)
     );
+    let mut display_args = Vec::new();
+    if verbose {
+        display_args.push("-d".to_owned());
+    }
+    display_args.extend(["-e".to_owned(), mirror_command, host.to_owned()]);
 
     #[cfg(windows)]
     let (program, args) = ("cmd".to_owned(), vec!["/C".to_owned(), script.clone()]);
@@ -186,10 +214,7 @@ fn ftp_command(config: &NowConfig, source: &Path) -> Result<ProviderCommand> {
     Ok(
         ProviderCommand::new(ProviderKind::Ftp, program, args, "lftp")
             .with_required_env(vec![username_env.to_owned(), password_env.to_owned()])
-            .with_display(
-                "lftp",
-                vec!["-e".to_owned(), mirror_command, host.to_owned()],
-            ),
+            .with_display("lftp", display_args),
     )
 }
 
@@ -281,7 +306,8 @@ mod tests {
     fn firebase_command_uses_hosting_only() {
         let config = NowConfig::default();
         let command =
-            build_provider_command(ProviderKind::Firebase, &config, Path::new("public")).unwrap();
+            build_provider_command(ProviderKind::Firebase, &config, Path::new("public"), false)
+                .unwrap();
 
         assert_eq!(command.program, "firebase");
         assert_eq!(command.args, ["deploy", "--only", "hosting"]);
@@ -290,9 +316,10 @@ mod tests {
     #[test]
     fn azure_blob_command_builder_is_not_used_for_native_upload() {
         let config = NowConfig::default();
-        let error = build_provider_command(ProviderKind::AzureBlob, &config, Path::new("public"))
-            .unwrap_err()
-            .to_string();
+        let error =
+            build_provider_command(ProviderKind::AzureBlob, &config, Path::new("public"), false)
+                .unwrap_err()
+                .to_string();
 
         assert!(error.contains("built-in SAS URL upload"));
     }
@@ -310,7 +337,7 @@ mod tests {
             ..NowConfig::default()
         };
         let command =
-            build_provider_command(ProviderKind::Ftp, &config, Path::new("public")).unwrap();
+            build_provider_command(ProviderKind::Ftp, &config, Path::new("public"), false).unwrap();
 
         assert!(!command.display_line().contains("super-secret"));
         assert!(command.display_line().contains("lftp"));
@@ -331,7 +358,8 @@ mod tests {
         };
 
         let command =
-            build_provider_command(ProviderKind::AzureSwa, &config, Path::new("public")).unwrap();
+            build_provider_command(ProviderKind::AzureSwa, &config, Path::new("public"), false)
+                .unwrap();
 
         assert_eq!(command.required_env, ["AZURE_STATIC_WEB_APPS_API_TOKEN"]);
         assert_eq!(
@@ -342,5 +370,69 @@ mod tests {
             )]
         );
         assert!(!command.display_line().contains("TOKEN"));
+    }
+
+    #[test]
+    fn azure_swa_resolves_configured_token_from_env_file() {
+        let config = NowConfig {
+            azure_swa: crate::config::AzureSwaConfig {
+                deployment_token_env: Some("MY_SWA_TOKEN".to_owned()),
+                ..Default::default()
+            },
+            ..NowConfig::default()
+        };
+        let env_file = crate::env_file::EnvFile::from_pairs(&[("MY_SWA_TOKEN", "from-dotenv")]);
+        let command =
+            build_provider_command(ProviderKind::AzureSwa, &config, Path::new("public"), false)
+                .unwrap();
+
+        command.validate_environment(Some(&env_file)).unwrap();
+        let mut process = std::process::Command::new("swa");
+        command
+            .apply_environment(&mut process, Some(&env_file))
+            .unwrap();
+
+        assert!(process.get_envs().any(|(name, value)| {
+            name == "SWA_CLI_DEPLOYMENT_TOKEN" && value == Some(std::ffi::OsStr::new("from-dotenv"))
+        }));
+    }
+
+    #[test]
+    fn verbose_provider_commands_enable_external_debug_logging() {
+        let firebase = build_provider_command(
+            ProviderKind::Firebase,
+            &NowConfig::default(),
+            Path::new("public"),
+            true,
+        )
+        .unwrap();
+        assert_eq!(firebase.args, ["--debug", "deploy", "--only", "hosting"]);
+
+        let swa = build_provider_command(
+            ProviderKind::AzureSwa,
+            &NowConfig::default(),
+            Path::new("public"),
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            &swa.args[..3],
+            [
+                "--verbose".to_owned(),
+                "silly".to_owned(),
+                "deploy".to_owned()
+            ]
+        );
+
+        let ftp_config = NowConfig {
+            ftp: FtpConfig {
+                host: Some("example.com".to_owned()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let ftp = build_provider_command(ProviderKind::Ftp, &ftp_config, Path::new("public"), true)
+            .unwrap();
+        assert!(ftp.execution_line().contains("lftp -d"));
     }
 }
