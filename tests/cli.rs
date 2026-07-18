@@ -169,6 +169,38 @@ fn explicit_path_does_not_rewrite_existing_source() {
 }
 
 #[test]
+fn source_flag_overrides_config_without_rewriting_it() {
+    let site = TempDir::new().unwrap();
+    let config_home = TempDir::new().unwrap();
+    site.child("configured/index.html")
+        .write_str("configured")
+        .unwrap();
+    site.child("one-off/index.html")
+        .write_str("one-off")
+        .unwrap();
+    let original = r#"{
+  "provider": "firebase-hosting",
+  "source": "configured"
+}
+"#;
+    site.child(".now.json").write_str(original).unwrap();
+
+    now_cmd(&config_home)
+        .current_dir(site.path())
+        .args(["deploy", "--source", "one-off", "--dry-run"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            site.path().join("one-off").display().to_string(),
+        ));
+
+    assert_eq!(
+        std::fs::read_to_string(site.path().join(".now.json")).unwrap(),
+        original
+    );
+}
+
+#[test]
 fn invalid_explicit_path_fails_without_creating_local_config() {
     let site = TempDir::new().unwrap();
     let config_home = TempDir::new().unwrap();
@@ -524,6 +556,39 @@ fn azure_blob_dry_run_supports_prefix_and_masks_sas() {
 }
 
 #[test]
+fn prefix_flag_overrides_azure_blob_config() {
+    let site = TempDir::new().unwrap();
+    let config_home = TempDir::new().unwrap();
+    site.child("public/index.html").write_str("ok").unwrap();
+    site.child(".now.json")
+        .write_str(
+            r#"{
+  "provider": "azure-storage-blob",
+  "azure_blob": {
+    "sas_url_env": "NOW_AZURE_BLOB_SAS_URL",
+    "prefix": "configured"
+  }
+}
+"#,
+        )
+        .unwrap();
+    site.child(".env")
+        .write_str(
+            r#"NOW_AZURE_BLOB_SAS_URL="https://acct.blob.core.windows.net/$web?sv=1&sig=secret"
+"#,
+        )
+        .unwrap();
+
+    now_cmd(&config_home)
+        .current_dir(site.path())
+        .args(["deploy", "--prefix", "one-off/sub", "--dry-run"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("/$web/one-off/sub?<redacted>"))
+        .stdout(predicate::str::contains("/$web/configured?").not());
+}
+
+#[test]
 fn azure_storage_blob_provider_accepts_display_name_as_cli_value() {
     let site = TempDir::new().unwrap();
     let config_home = TempDir::new().unwrap();
@@ -646,4 +711,31 @@ fn any_website_ftp_provider_accepts_display_name() {
         .success()
         .stdout(predicate::str::contains("Provider: Any Website (FTP)"))
         .stdout(predicate::str::contains("lftp"));
+}
+
+#[test]
+fn remote_dir_flag_overrides_ftp_config() {
+    let site = TempDir::new().unwrap();
+    let config_home = TempDir::new().unwrap();
+    site.child("public/index.html").write_str("ok").unwrap();
+    site.child(".now.json")
+        .write_str(
+            r#"{
+  "provider": "any-website-ftp",
+  "ftp": {
+    "host": "ftp.example.com",
+    "remote_dir": "/configured"
+  }
+}
+"#,
+        )
+        .unwrap();
+
+    now_cmd(&config_home)
+        .current_dir(site.path())
+        .args(["deploy", "--remote_dir", "/one-off", "--dry-run"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("/one-off"))
+        .stdout(predicate::str::contains("/configured").not());
 }

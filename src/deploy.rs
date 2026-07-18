@@ -21,8 +21,11 @@ use walkdir::WalkDir;
 pub struct DeployRequest {
     pub cwd: PathBuf,
     pub path: Option<PathBuf>,
+    pub source: Option<PathBuf>,
     pub path_was_explicit: bool,
     pub provider: Option<ProviderKind>,
+    pub prefix: Option<String>,
+    pub remote_dir: Option<String>,
     pub dry_run: bool,
     pub json: bool,
     pub verbose: bool,
@@ -72,16 +75,17 @@ pub fn execute_deploy(request: DeployRequest) -> Result<()> {
 
     let mut merged_value = merged_config_value(&request.cwd, request.provider)?;
     let mut config = parse_config(merged_value)?;
+    let source_override = request.source.as_deref();
     let mut selection = select_source(
         &request.cwd,
-        request.path.as_deref(),
-        request.path_was_explicit,
+        request.path.as_deref().or(source_override),
+        request.path_was_explicit || source_override.is_some(),
         config.source.as_deref(),
     )?;
     let provider = match config.provider {
         Some(provider) => provider,
         None if should_prompt_first_run(&request) => {
-            let initial_source = if selection.mode == SourceMode::ExplicitPath {
+            let initial_source = if request.path_was_explicit {
                 Some(config_source_for_path(&request.cwd, &selection.source)?)
             } else {
                 None
@@ -107,6 +111,12 @@ pub fn execute_deploy(request: DeployRequest) -> Result<()> {
             bail!("provider is not configured; use --provider or set provider in .now.json");
         }
     };
+    if let Some(prefix) = request.prefix {
+        config.azure_blob.prefix = Some(prefix);
+    }
+    if let Some(remote_dir) = request.remote_dir {
+        config.ftp.remote_dir = Some(remote_dir);
+    }
     verbose_log(request.verbose, format_args!("Provider: {provider}"));
 
     let local_env = if matches!(provider, ProviderKind::AzureBlob | ProviderKind::AzureSwa) {

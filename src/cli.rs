@@ -31,6 +31,25 @@ pub struct Cli {
 
     #[arg(
         long,
+        value_name = "PATH",
+        conflicts_with = "path",
+        help = "Override source for this deployment"
+    )]
+    source: Option<PathBuf>,
+
+    #[arg(long, value_name = "PREFIX", help = "Override azure_blob.prefix")]
+    prefix: Option<String>,
+
+    #[arg(
+        long = "remote_dir",
+        visible_alias = "remote-dir",
+        value_name = "PATH",
+        help = "Override ftp.remote_dir"
+    )]
+    remote_dir: Option<String>,
+
+    #[arg(
+        long,
         help = "Show detailed diagnostics and enable provider debug logs"
     )]
     verbose: bool,
@@ -50,6 +69,25 @@ enum Command {
 struct DeployArgs {
     #[arg(value_name = "PATH")]
     path: Option<PathBuf>,
+
+    #[arg(
+        long,
+        value_name = "PATH",
+        conflicts_with = "path",
+        help = "Override source for this deployment"
+    )]
+    source: Option<PathBuf>,
+
+    #[arg(long, value_name = "PREFIX", help = "Override azure_blob.prefix")]
+    prefix: Option<String>,
+
+    #[arg(
+        long = "remote_dir",
+        visible_alias = "remote-dir",
+        value_name = "PATH",
+        help = "Override ftp.remote_dir"
+    )]
+    remote_dir: Option<String>,
 
     #[arg(long, value_parser = parse_provider)]
     provider: Option<ProviderKind>,
@@ -149,7 +187,10 @@ fn execute(cli: Cli) -> Result<()> {
             cwd,
             path_was_explicit: args.path.is_some(),
             path: args.path,
+            source: args.source,
             provider: args.provider,
+            prefix: args.prefix,
+            remote_dir: args.remote_dir,
             dry_run: args.dry_run,
             json: args.json,
             verbose: args.verbose,
@@ -160,7 +201,10 @@ fn execute(cli: Cli) -> Result<()> {
             cwd,
             path_was_explicit: cli.path.is_some(),
             path: cli.path,
+            source: cli.source,
             provider: None,
+            prefix: cli.prefix,
+            remote_dir: cli.remote_dir,
             dry_run: false,
             json: false,
             verbose: cli.verbose,

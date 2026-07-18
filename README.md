@@ -310,6 +310,17 @@ now ./public
 now config set source reports/example
 ```
 
+也可以使用具名旗標，單次覆寫 `.now.json` 內的部署參數：
+
+```sh
+now --source dist
+now deploy --source dist
+now deploy --prefix releases/2026-07-18
+now deploy --remote_dir /public_html/releases/2026-07-18
+```
+
+`--source` 覆寫 `source`，`--prefix` 覆寫 `azure_blob.prefix`，`--remote_dir` 覆寫 `ftp.remote_dir`。這些值只套用於當次部署，不會改寫 `.now.json`。`--remote-dir` 也可作為 `--remote_dir` 的別名。
+
 * * *
 
 ## URL 選擇規則

@@ -8,6 +8,15 @@
 
 ## [Unreleased]
 
+* * *
+
+## [0.1.2] - 2026-07-19
+
+### 新增
+
+- 部署命令新增 `--source`、`--prefix` 與 `--remote_dir` 具名旗標，可在單次部署覆寫來源目錄、Azure Storage Blob 前綴與 FTP 遠端目錄，且不會改寫 `.now.json`。
+- `--remote-dir` 可作為 `--remote_dir` 的別名。
+
 ### 變更
 
 - 將 GitHub Actions 的 artifact、Node.js 與 Pages actions 升級至 Node.js 24 版本，消除 Node.js 20 棄用警告。
@@ -60,6 +69,7 @@
 - 提供 macOS Apple Silicon、macOS Intel、Linux x64 glibc 與 Windows x64 原生執行檔及 SHA-256 checksum。
 - 提供 npm、Unix-like 安裝腳本、Windows PowerShell 安裝腳本與 GitHub Release 發布流程。
 
-[Unreleased]: https://github.com/doggy8088/now/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/doggy8088/now/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/doggy8088/now/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/doggy8088/now/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/doggy8088/now/releases/tag/v0.1.0
