@@ -139,6 +139,51 @@ fn deploy_dry_run_uses_configured_provider() {
 }
 
 #[test]
+fn explicit_path_does_not_rewrite_existing_source() {
+    let site = TempDir::new().unwrap();
+    let config_home = TempDir::new().unwrap();
+    site.child("configured/index.html")
+        .write_str("configured")
+        .unwrap();
+    site.child("one-off/index.html")
+        .write_str("one-off")
+        .unwrap();
+    let original = r#"{
+  "provider": "firebase-hosting",
+  "source": "configured"
+}
+"#;
+    site.child(".now.json").write_str(original).unwrap();
+
+    now_cmd(&config_home)
+        .current_dir(site.path())
+        .args(["deploy", "one-off", "--dry-run"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Source mode: ExplicitPath"));
+
+    assert_eq!(
+        std::fs::read_to_string(site.path().join(".now.json")).unwrap(),
+        original
+    );
+}
+
+#[test]
+fn invalid_explicit_path_fails_without_creating_local_config() {
+    let site = TempDir::new().unwrap();
+    let config_home = TempDir::new().unwrap();
+
+    now_cmd(&config_home)
+        .current_dir(site.path())
+        .args(["deploy", "missing", "--dry-run"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("source path is not a directory"));
+
+    assert!(!site.path().join(".now.json").exists());
+}
+
+#[test]
 fn config_set_and_get_local_value() {
     let site = TempDir::new().unwrap();
     let config_home = TempDir::new().unwrap();

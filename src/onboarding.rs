@@ -11,6 +11,7 @@ use std::path::Path;
 
 pub fn run_first_run_setup<R: BufRead, W: Write>(
     root: &Path,
+    initial_source: Option<&str>,
     input: &mut R,
     output: &mut W,
 ) -> Result<ProviderKind> {
@@ -26,7 +27,7 @@ pub fn run_first_run_setup<R: BufRead, W: Write>(
     )?;
     writeln!(output)?;
 
-    let provider = run_setup(root, &path, input, output)?;
+    let provider = run_setup(root, &path, initial_source, input, output)?;
     writeln!(output, "Continuing with deployment.")?;
 
     Ok(provider)
@@ -45,7 +46,7 @@ pub fn run_init_setup<R: BufRead, W: Write>(
     )?;
     writeln!(output)?;
 
-    let provider = run_setup(root, path, input, output)?;
+    let provider = run_setup(root, path, None, input, output)?;
     writeln!(output, "Configuration complete. No deployment was started.")?;
 
     Ok(provider)
@@ -54,6 +55,7 @@ pub fn run_init_setup<R: BufRead, W: Write>(
 fn run_setup<R: BufRead, W: Write>(
     root: &Path,
     path: &Path,
+    initial_source: Option<&str>,
     input: &mut R,
     output: &mut W,
 ) -> Result<ProviderKind> {
@@ -71,6 +73,9 @@ fn run_setup<R: BufRead, W: Write>(
         "provider",
         Value::String(provider.as_str().to_owned()),
     )?;
+    if let Some(source) = initial_source {
+        set_key(&mut config, "source", Value::String(source.to_owned()))?;
+    }
 
     if provider != ProviderKind::AzureBlob {
         prompt_common_settings(input, output, &mut config)?;
@@ -101,6 +106,9 @@ fn run_setup<R: BufRead, W: Write>(
     writeln!(output)?;
     let action = if config_existed { "Updated" } else { "Created" };
     writeln!(output, "{action} {}", path.display())?;
+    if let Some(source) = initial_source {
+        writeln!(output, "Saved source: {source}")?;
+    }
 
     Ok(provider)
 }
@@ -459,7 +467,7 @@ mod tests {
         let mut input = Cursor::new(answers.as_slice());
         let mut output = Vec::new();
 
-        let provider = run_first_run_setup(temp.path(), &mut input, &mut output).unwrap();
+        let provider = run_first_run_setup(temp.path(), None, &mut input, &mut output).unwrap();
         let config = read_json_file(&local_config_path(temp.path())).unwrap();
 
         assert_eq!(provider, ProviderKind::Firebase);
@@ -479,13 +487,41 @@ mod tests {
     }
 
     #[test]
+    fn first_run_setup_saves_explicit_source() {
+        let temp = TempDir::new().unwrap();
+        let answers = b"1\nhttps://example.web.app\n\nmy-project\n\n";
+        let mut input = Cursor::new(answers.as_slice());
+        let mut output = Vec::new();
+
+        let provider = run_first_run_setup(
+            temp.path(),
+            Some("reports/litellm-spend/2026-07-18"),
+            &mut input,
+            &mut output,
+        )
+        .unwrap();
+        let config = read_json_file(&local_config_path(temp.path())).unwrap();
+
+        assert_eq!(provider, ProviderKind::Firebase);
+        assert_eq!(
+            get_key(&config, "source"),
+            Some(&json!("reports/litellm-spend/2026-07-18"))
+        );
+        assert!(
+            String::from_utf8(output)
+                .unwrap()
+                .contains("Saved source: reports/litellm-spend/2026-07-18")
+        );
+    }
+
+    #[test]
     fn first_run_setup_writes_azure_blob_sas_url_to_env_file() {
         let temp = TempDir::new().unwrap();
         let answers = b"2\n\nhttps://acct.blob.core.windows.net/$web?sv=1&sig=secret\nmy-prefix\n";
         let mut input = Cursor::new(answers.as_slice());
         let mut output = Vec::new();
 
-        let provider = run_first_run_setup(temp.path(), &mut input, &mut output).unwrap();
+        let provider = run_first_run_setup(temp.path(), None, &mut input, &mut output).unwrap();
         let config = read_json_file(&local_config_path(temp.path())).unwrap();
 
         assert_eq!(provider, ProviderKind::AzureBlob);
@@ -523,7 +559,7 @@ mod tests {
         let mut input = Cursor::new(answers.as_slice());
         let mut output = Vec::new();
 
-        let provider = run_first_run_setup(temp.path(), &mut input, &mut output).unwrap();
+        let provider = run_first_run_setup(temp.path(), None, &mut input, &mut output).unwrap();
         let config = read_json_file(&local_config_path(temp.path())).unwrap();
 
         assert_eq!(provider, ProviderKind::AzureBlob);
@@ -551,7 +587,7 @@ mod tests {
         let mut input = Cursor::new(answers.as_slice());
         let mut output = Vec::new();
 
-        let provider = run_first_run_setup(temp.path(), &mut input, &mut output).unwrap();
+        let provider = run_first_run_setup(temp.path(), None, &mut input, &mut output).unwrap();
         let config = read_json_file(&local_config_path(temp.path())).unwrap();
 
         assert_eq!(provider, ProviderKind::AzureSwa);

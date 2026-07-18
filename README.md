@@ -77,6 +77,8 @@ now deploy dist
 
 第一次在互動式終端機執行 `now` 或 `now deploy`，且尚未設定 provider 時，CLI 會啟動首次設定流程，協助選擇 provider 並把非祕密設定寫入 `.now.json`。非互動式環境或 `--json` 模式不會啟動提示流程，會直接輸出缺少 provider 的錯誤。
 
+首次設定時若有明確指定 path，now 會先驗證該目錄，再把它保存為 `.now.json` 的 `source`。專案內目錄保存為相對於目前工作目錄的路徑，後續可直接執行 `now` 重複部署；專案外目錄保存為絕對路徑。
+
 也可以明確啟動互動式設定精靈：
 
 ```sh
@@ -300,6 +302,12 @@ now config set move_publishable_files_to_public null
 ```sh
 now deploy dist
 now ./public
+```
+
+命令列 path 的優先序高於設定檔中的 `source`。除首次設定會保存明確指定的 path 外，後續指定 path 只覆寫當次部署來源，不會暗中改寫 `.now.json`；如需永久變更，請使用：
+
+```sh
+now config set source reports/example
 ```
 
 * * *

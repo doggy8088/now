@@ -1,6 +1,6 @@
 {
   "name": "@willh/now",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Deploy static sites with provider CLIs",
   "bin": {
     "now": "npm/cli.cjs"
@@ -15,6 +15,7 @@
     "npm/postinstall.cjs",
     "npm/prepublish-check.cjs",
     "tests/postinstall.test.cjs",
+    "CHANGELOG.md",
     "README.md",
     "LICENSE"
   ],

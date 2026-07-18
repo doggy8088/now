@@ -72,14 +72,30 @@ pub fn execute_deploy(request: DeployRequest) -> Result<()> {
 
     let mut merged_value = merged_config_value(&request.cwd, request.provider)?;
     let mut config = parse_config(merged_value)?;
+    let mut selection = select_source(
+        &request.cwd,
+        request.path.as_deref(),
+        request.path_was_explicit,
+        config.source.as_deref(),
+    )?;
     let provider = match config.provider {
         Some(provider) => provider,
         None if should_prompt_first_run(&request) => {
+            let initial_source = if selection.mode == SourceMode::ExplicitPath {
+                Some(config_source_for_path(&request.cwd, &selection.source)?)
+            } else {
+                None
+            };
             let stdin = io::stdin();
             let mut input = io::BufReader::new(stdin.lock());
             let stdout = io::stdout();
             let mut output = stdout.lock();
-            run_first_run_setup(&request.cwd, &mut input, &mut output)?;
+            run_first_run_setup(
+                &request.cwd,
+                initial_source.as_deref(),
+                &mut input,
+                &mut output,
+            )?;
 
             merged_value = merged_config_value(&request.cwd, request.provider)?;
             config = parse_config(merged_value)?;
@@ -98,12 +114,6 @@ pub fn execute_deploy(request: DeployRequest) -> Result<()> {
     } else {
         None
     };
-    let mut selection = select_source(
-        &request.cwd,
-        request.path.as_deref(),
-        request.path_was_explicit,
-        config.source.as_deref(),
-    )?;
     verbose_log(
         request.verbose,
         format_args!(
@@ -321,22 +331,25 @@ pub fn select_source(
         let path = path.context("explicit path flag was set without a path")?;
         let source = resolve_path(project_root, path);
         ensure_directory(&source)?;
+        let excludes_enabled = source == project_root || path == Path::new(".");
         return Ok(SourceSelection {
             project_root: project_root.to_path_buf(),
             source,
             mode: SourceMode::ExplicitPath,
-            excludes_enabled: false,
+            excludes_enabled,
         });
     }
 
     if let Some(config_source) = config_source.filter(|value| !value.trim().is_empty()) {
-        let source = resolve_path(project_root, Path::new(config_source));
+        let configured_path = Path::new(config_source);
+        let source = resolve_path(project_root, configured_path);
         ensure_directory(&source)?;
+        let excludes_enabled = source == project_root || configured_path == Path::new(".");
         return Ok(SourceSelection {
             project_root: project_root.to_path_buf(),
             source,
             mode: SourceMode::ConfiguredSource,
-            excludes_enabled: false,
+            excludes_enabled,
         });
     }
 
@@ -484,6 +497,34 @@ fn resolve_path(root: &Path, path: &Path) -> PathBuf {
     } else {
         root.join(path)
     }
+}
+
+fn config_source_for_path(project_root: &Path, source: &Path) -> Result<String> {
+    let canonical_root = project_root.canonicalize().with_context(|| {
+        format!(
+            "failed to resolve project root for saved source: {}",
+            project_root.display()
+        )
+    })?;
+    let canonical_source = source.canonicalize().with_context(|| {
+        format!(
+            "failed to resolve source path for saved source: {}",
+            source.display()
+        )
+    })?;
+
+    let stored_path = match canonical_source.strip_prefix(&canonical_root) {
+        Ok(relative) if relative.as_os_str().is_empty() => return Ok(".".to_owned()),
+        Ok(relative) => relative,
+        Err(_) => canonical_source.as_path(),
+    };
+
+    stored_path.to_str().map(str::to_owned).with_context(|| {
+        format!(
+            "source path cannot be saved as UTF-8 in .now.json: {}",
+            stored_path.display()
+        )
+    })
 }
 
 fn ensure_directory(path: &Path) -> Result<()> {
@@ -652,6 +693,61 @@ mod tests {
 
         assert_eq!(selection.source, temp.path().join("site"));
         assert_eq!(selection.mode, SourceMode::ExplicitPath);
+    }
+
+    #[test]
+    fn explicit_source_inside_project_is_saved_as_relative_path() {
+        let temp = TempDir::new().unwrap();
+        temp.child("reports/litellm-spend/2026-07-18")
+            .create_dir_all()
+            .unwrap();
+        let source = temp.path().join("reports/litellm-spend/2026-07-18");
+
+        let config_source = config_source_for_path(temp.path(), &source).unwrap();
+
+        assert_eq!(config_source, "reports/litellm-spend/2026-07-18");
+    }
+
+    #[test]
+    fn explicit_project_root_is_saved_as_dot() {
+        let temp = TempDir::new().unwrap();
+
+        let config_source = config_source_for_path(temp.path(), temp.path()).unwrap();
+
+        assert_eq!(config_source, ".");
+    }
+
+    #[test]
+    fn explicit_project_root_keeps_runtime_excludes_enabled() {
+        let temp = TempDir::new().unwrap();
+
+        let selection = select_source(temp.path(), Some(Path::new(".")), true, None).unwrap();
+
+        assert_eq!(selection.mode, SourceMode::ExplicitPath);
+        assert!(selection.excludes_enabled);
+    }
+
+    #[test]
+    fn configured_project_root_keeps_runtime_excludes_enabled() {
+        let temp = TempDir::new().unwrap();
+
+        let selection = select_source(temp.path(), None, false, Some(".")).unwrap();
+
+        assert_eq!(selection.mode, SourceMode::ConfiguredSource);
+        assert!(selection.excludes_enabled);
+    }
+
+    #[test]
+    fn explicit_source_outside_project_is_saved_as_absolute_path() {
+        let project = TempDir::new().unwrap();
+        let source = TempDir::new().unwrap();
+
+        let config_source = config_source_for_path(project.path(), source.path()).unwrap();
+
+        assert_eq!(
+            config_source,
+            source.path().canonicalize().unwrap().to_str().unwrap()
+        );
     }
 
     #[test]

@@ -70,9 +70,12 @@ now config doctor
 - `--json` 以 JSON 格式輸出部署摘要。
 - `config doctor` 檢查設定檔、provider、provider CLI 可用性與明顯祕密設定。
 - 第一次在互動式終端機執行 `now` 或 `now deploy`，且尚未設定 provider 時，必須啟動首次設定流程，協助使用者選擇 provider 並把非祕密設定寫入 `.now.json`。
+- 首次設定若有明確指定 `path`，必須先驗證來源為目錄，再寫入 `.now.json` 的 `source`；專案內來源保存相對路徑，專案外來源保存絕對路徑。
 - 非互動式環境或 `--json` 模式不得啟動互動式提示，必須直接輸出缺少 provider 的錯誤。
 
 ### 3.2 來源目錄決策
+
+明確指定 `path` 時，該路徑優先於設定檔 `source` 與自動偵測結果。除首次設定外，命令列 `path` 只影響當次部署，不得改寫既有 `.now.json`。
 
 未指定 `path` 時，依序尋找：
 
