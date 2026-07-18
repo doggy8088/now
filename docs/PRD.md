@@ -311,7 +311,9 @@ GitHub Actions 需求：
 
 - CI workflow 執行 Rust format、clippy、Rust 測試與 npm 測試。
 - Release workflow 建立跨平台 binary archive 與 checksum。
-- npm publish workflow 使用 `npm publish --provenance --access public`。
+- Release workflow 發布 GitHub Release 資產成功後，必須直接呼叫可重用的 npm publish workflow，不得依賴 `GITHUB_TOKEN` 產生的 `release.published` 事件遞迴觸發。
+- npm publish workflow 必須驗證 release tag 格式與 `package.json` 版本一致，並使用 `npm publish --provenance --access public`。
+- npm publish workflow 必須保留可指定 release tag 的手動執行入口。
 - npm publish 前需確認對應版本的 GitHub Release assets 存在。
 
 * * *

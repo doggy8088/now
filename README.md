@@ -436,7 +436,7 @@ now-x86_64-pc-windows-msvc.zip
 now-x86_64-pc-windows-msvc.zip.sha256
 ```
 
-CI 會執行 Rust format、clippy、Rust 測試與 npm 測試。release workflow 會建立跨平台 binary archive 與 checksum。npm publish workflow 使用：
+CI 會執行 Rust format、clippy、Rust 測試與 npm 測試。release workflow 會建立跨平台 binary archive 與 checksum，發布 GitHub Release 資產成功後，再直接呼叫可重用的 npm publish workflow。npm publish workflow 也保留帶入 release tag 的手動執行入口，並使用：
 
 ```sh
 npm publish --provenance --access public

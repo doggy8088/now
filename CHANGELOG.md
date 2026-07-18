@@ -6,6 +6,19 @@
 
 * * *
 
+## [Unreleased]
+
+### 變更
+
+- 將 GitHub Actions 的 artifact、Node.js 與 Pages actions 升級至 Node.js 24 版本，消除 Node.js 20 棄用警告。
+
+### 修正
+
+- Release workflow 在 GitHub Release 資產發布成功後直接呼叫 npm 發布 workflow，不再依賴 `GITHUB_TOKEN` 無法遞迴觸發的 `release.published` 事件。
+- npm 發布 workflow 新增 release tag 格式與 `package.json` 版本一致性驗證，並保留帶入 tag 的手動執行入口。
+
+* * *
+
 ## [0.1.1] - 2026-07-18
 
 ### 新增
@@ -47,5 +60,6 @@
 - 提供 macOS Apple Silicon、macOS Intel、Linux x64 glibc 與 Windows x64 原生執行檔及 SHA-256 checksum。
 - 提供 npm、Unix-like 安裝腳本、Windows PowerShell 安裝腳本與 GitHub Release 發布流程。
 
+[Unreleased]: https://github.com/doggy8088/now/compare/v0.1.1...HEAD
 [0.1.1]: https://github.com/doggy8088/now/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/doggy8088/now/releases/tag/v0.1.0
