@@ -1,5 +1,7 @@
 name: Publish npm
 
+# This reusable workflow is called by release.yml. Configure the npm Trusted
+# Publisher workflow filename as release.yml, not npm-publish.yml.
 on:
   workflow_call:
     inputs:
@@ -28,7 +30,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
+          # Do not set registry-url here. setup-node writes an empty
+          # _authToken=${NODE_AUTH_TOKEN} entry, which prevents npm from
+          # exchanging the GitHub OIDC token when no npm token is configured.
+          package-manager-cache: false
       - name: Update npm to latest
         run: npm install -g npm@latest
       - name: Validate npm version against release tag
@@ -43,11 +48,13 @@ jobs:
           VERSION="${RELEASE_TAG#v}"
           PACKAGE_VERSION="$(node -p "require('./package.json').version")"
           if [[ "$PACKAGE_VERSION" != "$VERSION" ]]; then
-            echo "package.json version $PACKAGE_VERSION does not match $RELEASE_TAG" >&2
+            echo "package.json version $PACKAGE_VERSION does not match" \
+              "$RELEASE_TAG" >&2
             exit 1
           fi
-      - name: Publish
+      - name: Publish with npm trusted publishing
         run: npm publish --provenance --access public
         env:
+          NPM_CONFIG_REGISTRY: https://registry.npmjs.org
           WILLH_NOW_RELEASE_ASSET_RETRIES: 12
           WILLH_NOW_RELEASE_ASSET_RETRY_DELAY_MS: 10000
