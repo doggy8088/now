@@ -29,6 +29,7 @@ pub struct DeployRequest {
     pub dry_run: bool,
     pub json: bool,
     pub verbose: bool,
+    pub is_default_command: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -82,6 +83,7 @@ pub fn execute_deploy(request: DeployRequest) -> Result<()> {
         request.path_was_explicit || source_override.is_some(),
         config.source.as_deref(),
     )?;
+    let mut ran_first_run_setup = false;
     let provider = match config.provider {
         Some(provider) => provider,
         None if should_prompt_first_run(&request) => {
@@ -100,6 +102,7 @@ pub fn execute_deploy(request: DeployRequest) -> Result<()> {
                 &mut input,
                 &mut output,
             )?;
+            ran_first_run_setup = true;
 
             merged_value = merged_config_value(&request.cwd, request.provider)?;
             config = parse_config(merged_value)?;
@@ -111,11 +114,16 @@ pub fn execute_deploy(request: DeployRequest) -> Result<()> {
             bail!("provider is not configured; use --provider or set provider in .now.json");
         }
     };
-    if let Some(prefix) = request.prefix {
-        config.azure_blob.prefix = Some(prefix);
+    if let Some(prefix) = request.prefix.as_deref() {
+        config.azure_blob.prefix = Some(prefix.to_owned());
     }
-    if let Some(remote_dir) = request.remote_dir {
-        config.ftp.remote_dir = Some(remote_dir);
+    if let Some(remote_dir) = request.remote_dir.as_deref() {
+        config.ftp.remote_dir = Some(remote_dir.to_owned());
+    }
+    if !ran_first_run_setup
+        && should_prompt_azure_blob_prefix(&request, provider, &config, io::stdin().is_terminal())
+    {
+        prompt_and_remember_azure_blob_prefix(&request.cwd, &mut config)?;
     }
     verbose_log(request.verbose, format_args!("Provider: {provider}"));
 
@@ -329,6 +337,24 @@ fn verbose_log(enabled: bool, message: std::fmt::Arguments<'_>) {
 
 fn should_prompt_first_run(request: &DeployRequest) -> bool {
     request.provider.is_none() && !request.json && io::stdin().is_terminal()
+}
+
+fn should_prompt_azure_blob_prefix(
+    request: &DeployRequest,
+    provider: ProviderKind,
+    config: &NowConfig,
+    stdin_is_terminal: bool,
+) -> bool {
+    request.is_default_command
+        && provider == ProviderKind::AzureBlob
+        && request.prefix.is_none()
+        && !request.json
+        && stdin_is_terminal
+        && config
+            .azure_blob
+            .prefix
+            .as_deref()
+            .is_none_or(|prefix| prefix.trim().is_empty())
 }
 
 pub fn select_source(
@@ -585,6 +611,46 @@ fn prompt_create_public_dir(root: &Path) -> Result<bool> {
     prompt_and_remember_move_publishable_files(root, &mut input, &mut output)
 }
 
+fn prompt_and_remember_azure_blob_prefix(root: &Path, config: &mut NowConfig) -> Result<()> {
+    let stdin = io::stdin();
+    let mut input = io::BufReader::new(stdin.lock());
+    let stdout = io::stdout();
+    let mut output = stdout.lock();
+    prompt_and_remember_azure_blob_prefix_with_io(root, config, &mut input, &mut output)
+}
+
+fn prompt_and_remember_azure_blob_prefix_with_io<R: BufRead, W: Write>(
+    root: &Path,
+    config: &mut NowConfig,
+    input: &mut R,
+    output: &mut W,
+) -> Result<()> {
+    writeln!(
+        output,
+        "Azure Storage Blob is configured, but azure_blob.prefix is not configured for this project."
+    )?;
+    write!(output, "Azure Storage Blob folder prefix (optional): ")?;
+    output.flush()?;
+
+    let mut answer = String::new();
+    let bytes = input
+        .read_line(&mut answer)
+        .context("failed to read Azure Storage Blob prefix")?;
+    let prefix = answer.trim();
+    if bytes == 0 || prefix.is_empty() {
+        writeln!(output, "Skipped saving azure_blob.prefix.")?;
+        return Ok(());
+    }
+
+    config.azure_blob.prefix = Some(prefix.to_owned());
+    let path = local_config_path(root);
+    let mut local_config = read_json_file(&path)?;
+    set_key(&mut local_config, "azure_blob.prefix", json!(prefix))?;
+    write_json_file(&path, &local_config)?;
+    writeln!(output, "Saved azure_blob.prefix to {}", path.display())?;
+    Ok(())
+}
+
 fn prompt_and_remember_move_publishable_files<R: BufRead, W: Write>(
     root: &Path,
     input: &mut R,
@@ -680,6 +746,7 @@ mod tests {
     use crate::config::NowConfig;
     use assert_fs::TempDir;
     use assert_fs::prelude::*;
+    use serde_json::Value;
 
     #[test]
     fn selects_default_source_by_priority() {
@@ -798,6 +865,116 @@ mod tests {
             crate::config::get_key(&config, "move_publishable_files_to_public"),
             Some(&json!(false))
         );
+    }
+
+    #[test]
+    fn remembers_azure_blob_prefix_in_existing_local_config() {
+        let temp = TempDir::new().unwrap();
+        temp.child(".now.json")
+            .write_str(r#"{"provider":"azure-storage-blob","source":"public"}"#)
+            .unwrap();
+        let mut config = NowConfig {
+            provider: Some(ProviderKind::AzureBlob),
+            ..NowConfig::default()
+        };
+        let mut input = std::io::Cursor::new(b"site/sub\n");
+        let mut output = Vec::new();
+
+        prompt_and_remember_azure_blob_prefix_with_io(
+            temp.path(),
+            &mut config,
+            &mut input,
+            &mut output,
+        )
+        .unwrap();
+
+        assert_eq!(config.azure_blob.prefix.as_deref(), Some("site/sub"));
+        let local_config = crate::config::read_json_file(&temp.path().join(".now.json")).unwrap();
+        assert_eq!(
+            crate::config::get_key(&local_config, "provider").and_then(Value::as_str),
+            Some("azure-storage-blob")
+        );
+        assert_eq!(
+            crate::config::get_key(&local_config, "source").and_then(Value::as_str),
+            Some("public")
+        );
+        assert_eq!(
+            crate::config::get_key(&local_config, "azure_blob.prefix").and_then(Value::as_str),
+            Some("site/sub")
+        );
+        assert!(
+            String::from_utf8(output)
+                .unwrap()
+                .contains("Saved azure_blob.prefix")
+        );
+    }
+
+    #[test]
+    fn remembers_azure_blob_prefix_when_local_config_is_missing() {
+        let temp = TempDir::new().unwrap();
+        let mut config = NowConfig {
+            provider: Some(ProviderKind::AzureBlob),
+            ..NowConfig::default()
+        };
+        let mut input = std::io::Cursor::new(b"site\n");
+        let mut output = Vec::new();
+
+        prompt_and_remember_azure_blob_prefix_with_io(
+            temp.path(),
+            &mut config,
+            &mut input,
+            &mut output,
+        )
+        .unwrap();
+
+        let local_config = crate::config::read_json_file(&temp.path().join(".now.json")).unwrap();
+        assert_eq!(
+            crate::config::get_key(&local_config, "azure_blob.prefix").and_then(Value::as_str),
+            Some("site")
+        );
+    }
+
+    #[test]
+    fn azure_blob_prefix_prompt_is_limited_to_direct_azure_blob_deployments() {
+        let temp = TempDir::new().unwrap();
+        let request = DeployRequest {
+            cwd: temp.path().to_path_buf(),
+            path: None,
+            source: None,
+            path_was_explicit: false,
+            provider: None,
+            prefix: None,
+            remote_dir: None,
+            dry_run: false,
+            json: false,
+            verbose: false,
+            is_default_command: true,
+        };
+        let config = NowConfig::default();
+
+        assert!(should_prompt_azure_blob_prefix(
+            &request,
+            ProviderKind::AzureBlob,
+            &config,
+            true
+        ));
+        assert!(!should_prompt_azure_blob_prefix(
+            &request,
+            ProviderKind::Firebase,
+            &config,
+            true
+        ));
+
+        let deploy_request = DeployRequest {
+            is_default_command: false,
+            ..request
+        };
+        assert!(!should_prompt_azure_blob_prefix(
+            &deploy_request,
+            ProviderKind::AzureBlob,
+            &config,
+            true
+        ));
     }
 
     #[test]

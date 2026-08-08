@@ -122,13 +122,57 @@ struct ScopeArgs {
 }
 
 #[derive(Debug, Args)]
+#[command(after_help = CONFIG_SET_HELP)]
 struct ConfigSetArgs {
+    #[arg(help = "Configuration key; see the available keys below")]
     key: String,
+
+    #[arg(help = "Value; true, false, null, numbers, objects, and arrays are parsed as JSON")]
     value: String,
 
     #[command(flatten)]
     scope: ScopeArgs,
 }
+
+const CONFIG_SET_HELP: &str = "\
+Available config keys:
+
+  General:
+    provider                           firebase-hosting | azure-storage-blob | azure-static-web-app | any-website-ftp
+    source                             Deployment source directory
+    move_publishable_files_to_public  true, false, or null
+    base_url                           Base URL for generated deployment links
+    default_url                        Explicit URL to report after deployment
+
+  Firebase Hosting:
+    firebase.project                  Firebase project ID
+    firebase.site                     Firebase Hosting site ID
+    firebase.base_url                 Firebase-specific base URL
+
+  Azure Storage Blob:
+    azure_blob.sas_url                Local-only convenience input; writes the SAS URL to .env
+    azure_blob.sas_url_env            Environment variable containing the SAS URL
+    azure_blob.account                Storage account name
+    azure_blob.container              Blob container name
+    azure_blob.destination_path      Destination path inside the container
+    azure_blob.overwrite              true or false
+    azure_blob.base_url               Azure-specific base URL
+    azure_blob.prefix                 Path prefix for uploaded files
+
+  Azure Static Web App:
+    azure_swa.app_name                Static Web App name
+    azure_swa.environment             Deployment environment, such as production
+    azure_swa.deployment_token_env    Environment variable containing the deployment token
+    azure_swa.base_url                Azure-specific base URL
+
+  Any Website (FTP):
+    ftp.host                          FTP host
+    ftp.remote_dir                    Remote directory
+    ftp.username_env                  Environment variable containing the FTP username
+    ftp.password_env                  Environment variable containing the FTP password
+    ftp.base_url                      FTP-specific base URL
+
+Secret values must be provided through environment variables or .env.\n";
 
 #[derive(Debug, Args)]
 struct ConfigGetArgs {
@@ -194,6 +238,7 @@ fn execute(cli: Cli) -> Result<()> {
             dry_run: args.dry_run,
             json: args.json,
             verbose: args.verbose,
+            is_default_command: false,
         }),
         Some(Command::Init(scope)) => init_config(scope.write_scope(), &cwd),
         Some(Command::Config { command }) => execute_config(command, cwd),
@@ -208,6 +253,7 @@ fn execute(cli: Cli) -> Result<()> {
             dry_run: false,
             json: false,
             verbose: cli.verbose,
+            is_default_command: true,
         }),
     }
 }

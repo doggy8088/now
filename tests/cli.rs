@@ -54,6 +54,48 @@ fn help_is_available() {
 }
 
 #[test]
+fn config_set_help_lists_all_available_keys() {
+    let config_home = TempDir::new().unwrap();
+    let output = now_cmd(&config_home)
+        .args(["config", "set", "-h"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let help = String::from_utf8(output.stdout).unwrap();
+    for key in [
+        "provider",
+        "source",
+        "move_publishable_files_to_public",
+        "base_url",
+        "default_url",
+        "firebase.project",
+        "firebase.site",
+        "firebase.base_url",
+        "azure_blob.sas_url",
+        "azure_blob.sas_url_env",
+        "azure_blob.account",
+        "azure_blob.container",
+        "azure_blob.destination_path",
+        "azure_blob.overwrite",
+        "azure_blob.base_url",
+        "azure_blob.prefix",
+        "azure_swa.app_name",
+        "azure_swa.environment",
+        "azure_swa.deployment_token_env",
+        "azure_swa.base_url",
+        "ftp.host",
+        "ftp.remote_dir",
+        "ftp.username_env",
+        "ftp.password_env",
+        "ftp.base_url",
+    ] {
+        assert!(help.contains(key), "config key missing from help: {key}");
+    }
+    assert!(help.contains("Secret values must be provided through environment variables"));
+}
+
+#[test]
 fn verbose_dry_run_reports_diagnostics_and_full_external_command() {
     let site = TempDir::new().unwrap();
     let config_home = TempDir::new().unwrap();
