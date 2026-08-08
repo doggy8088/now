@@ -4,7 +4,7 @@
 
   var SHORT = { "zh-TW": "繁中", "zh-CN": "简中", "en": "EN", "ja": "日", "ko": "한" };
   var META = {
-    "zh-TW": { title: "now｜一行命令部署靜態網站", desc: "now 讓靜態網站部署收斂成一行命令，整合 Firebase Hosting、Azure 與 FTP 的既有部署流程。選好目錄、組好命令、輸出預設 URL，部署從多步驟變成單一步驟。" },
+    "zh-TW": { title: "now｜一行命令部署靜態網站", desc: "now 是一個用來快速部署靜態網站的工具，支援 Firebase Hosting、Azure 與 FTP 等多種 Hosting 提供者。選好目錄並執行一行命令，即可完成部署並取得預設 URL。" },
     "zh-CN": { title: "now｜一行命令部署静态网站", desc: "now 把静态网站部署收敛成一行命令，整合 Firebase Hosting、Azure 和 FTP 的既有部署流程。选好目录、组装命令、输出预设网址，部署从多步骤变成单一步骤。" },
     "en":    { title: "now — ship static sites in one command", desc: "now folds static-site deploy into one command, wrapping the Firebase Hosting, Azure, and FTP flows you already use. Pick the folder, run the command, get the URL." },
     "ja":    { title: "now｜一行で静的サイトをデプロイ", desc: "now は静的サイトのデプロイを一行のコマンドにまとめ、Firebase Hosting・Azure・FTP の既存フローを統合します。フォルダを選び、コマンドを組み立て、URL を返します。" },
@@ -14,10 +14,10 @@
   var T = {
     "zh-TW": {
       "nav.tagline":"一行命令部署靜態網站","nav.why":"為什麼","nav.providers":"支援平台","nav.flow":"流程","nav.config":"設定","nav.install":"安裝",
-      "hero.eyebrow":"靜態網站部署","hero.title":"一行命令，<br>把靜態網站<em>交給雲端</em>。","hero.lede":"<code>now</code> 整合 Firebase Hosting、Azure 與 FTP 的部署流程。選好資料夾、組好命令、部署完直接給你網址——部署從一堆步驟，變成一步。","hero.ctaPrimary":"開始使用","copy.label":"複製",
+      "hero.eyebrow":"靜態網站部署","hero.title":"一行命令，<br>把靜態網站<em>交給雲端</em>。","hero.lede":"<code>now</code> 用一行命令快速部署靜態網站，支援 Firebase Hosting、Azure 與 FTP 等多種 Hosting 提供者；選好資料夾，部署完直接取得預設網址。","hero.ctaPrimary":"開始使用","copy.label":"複製",
       "hero.meta1":"macOS Apple / Intel","hero.meta2":"Linux x64","hero.meta3":"Windows x64","hero.meta4":"SHA-256 驗證",
-      "why.eyebrow":"為什麼是 now","why.title":"不重寫雲端，<br>只把部署收攏成一步。",
-      "why.1.h":"不重新造輪子","why.1.p":"now 不重寫 Firebase、Azure 或 FTP，而是接手你已經在用的 CLI。你既有的登入和權限都直接沿用，不用重新設定。",
+      "why.eyebrow":"為什麼是 now","why.title":"一支命令，<br>完成靜態網站部署。",
+      "why.1.h":"快速完成部署","why.1.p":"<code>now</code> 把不同 Hosting 提供者的部署方式整合成一致的操作介面，選擇資料夾、設定平台，就能快速完成部署。",
       "why.2.h":"一支命令，四個平台","why.2.p":"不管背後是 Firebase Hosting、Azure Storage Blob、Azure Static Web Apps 還是 FTP，對你都是同一支 <code>now</code>。換平台只換設定，肌肉記憶不用重學。",
       "why.3.h":"設定檔不碰機密","why.3.p":"<code>.now.json</code> 只存 provider、資料夾、網址這類安全設定。token 和密碼一律走環境變數或既有登入，不寫進設定檔、不進 repo。",
       "prov.eyebrow":"支援平台","prov.title":"四個雲端提供者，<br>各自交給各自的 CLI。","prov.lede":"<code>now</code> 負責選資料夾、組命令，實際部署交給下面的 provider CLI。裝好對應 CLI、登入一次，<code>now</code> 就能接手。",
@@ -38,7 +38,7 @@
       "install.win.p":"預設安裝到 <code>$env:LOCALAPPDATA\\now\\bin</code>。可用 <code>-InstallDir</code> 覆寫。",
       "install.manual.p":"下載對應平台 archive 與同名 <code>.sha256</code>，驗證 checksum 後解壓縮，把 <code>now</code> 或 <code>now.exe</code> 放進 PATH 內目錄。",
       "cta.title":"準備好了嗎？","cta.lede":"建置好靜態資產，一行命令把它交給雲端。","cta.github":"查看 GitHub","cta.install":"安裝 now",
-      "footer.desc":"把靜態網站交給既有 provider 部署流程。不重寫雲端協定，只把流程收攏成一步。","footer.resources":"資源","footer.latest":"最新 Release","footer.nav":"導覽","footer.tagline":"在午後陽光裡部署靜態網站。","footer.copy":"MIT License · © 2026 <a href='https://www.facebook.com/will.fans/' target='_blank' rel='noopener'>Will 保哥</a>",
+      "footer.desc":"快速部署靜態網站，支援多種 Hosting 提供者；一行命令完成部署並取得網址。","footer.resources":"資源","footer.latest":"最新 Release","footer.nav":"導覽","footer.tagline":"在午後陽光裡部署靜態網站。","footer.copy":"MIT License · © 2026 <a href='https://www.facebook.com/will.fans/' target='_blank' rel='noopener'>Will 保哥</a>",
       "aria.theme":"切換主題","aria.lang":"選擇語言","aria.menu":"選單"
     },
     "zh-CN": {

@@ -2,7 +2,7 @@
 name = "now"
 version = "0.1.3"
 edition = "2024"
-description = "Deploy static sites with provider CLIs"
+description = "A tool for quickly deploying static sites to multiple hosting providers"
 license = "MIT"
 repository = "https://github.com/doggy8088/now"
 

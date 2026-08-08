@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>now｜一行命令部署靜態網站</title>
-<meta name="description" content="now 讓靜態網站部署收斂成一行命令，整合 Firebase Hosting、Azure 與 FTP 的既有部署流程。選好目錄、組好命令、輸出預設 URL，部署從多步驟變成單一步驟。">
+<meta name="description" content="now 是一個用來快速部署靜態網站的工具，支援 Firebase Hosting、Azure 與 FTP 等多種 Hosting 提供者。選好目錄並執行一行命令，即可完成部署並取得預設 URL。">
 <meta name="author" content="doggy8088">
-<meta name="keywords" content="now, 靜態網站部署, Firebase Hosting, Azure Storage Blob, Azure Static Web Apps, FTP, 部署工具, static site deploy, devtools, rust cli">
+<meta name="keywords" content="now, 靜態網站部署, Firebase Hosting, Azure Storage Blob, Azure Static Web Apps, FTP, 部署工具, Hosting 提供者, static site deploy, devtools">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="theme-color" content="#1a1410" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
@@ -18,7 +18,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="now">
 <meta property="og:title" content="now｜一行命令部署靜態網站">
-<meta property="og:description" content="把靜態網站交給既有部署流程。一行命令，然後完成。整合 Firebase Hosting、Azure 與 FTP。">
+<meta property="og:description" content="快速部署靜態網站，支援 Firebase Hosting、Azure 與 FTP 等多種 Hosting 提供者。一行命令，然後完成。">
 <meta property="og:url" content="https://now.gh.miniasp.com/">
 <meta property="og:locale" content="zh_TW">
 <meta property="og:locale:alternate" content="zh_CN">
@@ -43,7 +43,7 @@
 <meta name="twitter:site" content="@doggy8088">
 <meta name="twitter:creator" content="@doggy8088">
 <meta name="twitter:title" content="now｜一行命令部署靜態網站">
-<meta name="twitter:description" content="把靜態網站交給既有部署流程。一行命令，然後完成。">
+<meta name="twitter:description" content="快速部署靜態網站，支援 Firebase Hosting、Azure 與 FTP 等多種 Hosting 提供者。一行命令，然後完成。">
 <meta name="twitter:image" content="https://now.gh.miniasp.com/assets/og-image.png">
 <meta name="twitter:image:alt" content="now — 一行命令部署靜態網站">
 <meta name="twitter:label1" content="Install">
@@ -76,7 +76,7 @@
   "name": "now",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "macOS, Linux, Windows",
-  "description": "A Rust CLI that ships static sites through your existing provider CLIs — Firebase Hosting, Azure Storage Blob, Azure Static Web Apps, and FTP. One command, then done.",
+  "description": "A tool for quickly deploying static sites to multiple hosting providers — Firebase Hosting, Azure Storage Blob, Azure Static Web Apps, and FTP. One command, then done.",
   "url": "https://now.gh.miniasp.com/",
   "downloadUrl": "https://github.com/doggy8088/now/releases/latest",
   "author": { "@type": "Person", "name": "Will (doggy8088)", "url": "https://github.com/doggy8088" },
@@ -144,7 +144,7 @@
       <div class="reveal stagger" style="--i:0">
         <span class="eyebrow" data-i18n="hero.eyebrow">靜態網站部署</span>
         <h1 id="hero-title" class="hero-headline" data-i18n-html="hero.title">一行命令，<br>把靜態網站<em>交給雲端</em>。</h1>
-        <p class="lede" data-i18n="hero.lede"><code>now</code> 整合 Firebase Hosting、Azure 與 FTP 的既有部署流程。選好可發布目錄、組好 provider 命令、部署後輸出預設 URL；部署從多步驟，變成單一步驟。</p>
+        <p class="lede" data-i18n="hero.lede"><code>now</code> 用一行命令快速部署靜態網站，支援 Firebase Hosting、Azure 與 FTP 等多種 Hosting 提供者；選好可發布目錄，部署後直接取得預設 URL。</p>
         <div class="hero-cta">
           <a class="btn btn--primary" href="#install"><span data-i18n="hero.ctaPrimary">開始使用</span> <span class="arrow">→</span></a>
           <span class="cmd"><span class="prompt">$</span> npm install -g @willh/now<button class="copy" data-copy="npm install -g @willh/now" data-i18n="copy.label" aria-label="Copy">複製</button></span>
@@ -181,11 +181,11 @@
   <section id="why" aria-labelledby="why-title">
     <div class="wrap">
       <span class="eyebrow reveal" data-i18n="why.eyebrow">為什麼是 now</span>
-      <h2 id="why-title" class="reveal" style="margin-top:1rem" data-i18n-html="why.title">不重寫雲端，<br>只把部署流程收攏成一步。</h2>
+      <h2 id="why-title" class="reveal" style="margin-top:1rem" data-i18n-html="why.title">一支命令，<br>完成靜態網站部署。</h2>
       <div class="three">
         <div class="item reveal" style="--i:0">
-          <h3 data-i18n="why.1.h">不重新實作雲端協定</h3>
-          <p data-i18n="why.1.p">初版重點是包裝與協調，不是重寫 Firebase Hosting、Azure 或 FTP 的部署邏輯。實際部署交給各 provider 已有的 CLI，你既有的登入狀態與權限都直接沿用。</p>
+          <h3 data-i18n="why.1.h">快速完成部署</h3>
+          <p data-i18n="why.1.p"><code>now</code> 把不同 Hosting 提供者的部署方式整合成一致的操作介面，選擇目錄、設定平台，就能快速完成部署。</p>
         </div>
         <div class="item reveal" style="--i:1">
           <h3 data-i18n="why.2.h">一致的命令，四個平台</h3>
@@ -358,7 +358,7 @@
     <div class="footer-grid">
       <div>
         <a class="brand" href="#top">now<span class="dot">.</span></a>
-        <p style="margin-top:1rem" data-i18n="footer.desc">把靜態網站交給既有 provider 部署流程。不重寫雲端協定，只把流程收攏成一步。</p>
+        <p style="margin-top:1rem" data-i18n="footer.desc">快速部署靜態網站，支援多種 Hosting 提供者；一行命令完成部署並取得網址。</p>
       </div>
       <div>
         <h3 data-i18n="footer.resources">資源</h3>

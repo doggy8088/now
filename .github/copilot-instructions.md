@@ -1,6 +1,6 @@
 # Copilot Instructions — `now`
 
-`now` 是一個 Rust CLI，把靜態網站交給既有 provider CLI 部署。初版重點是包裝與協調，不重新實作雲端 provider 的部署協定。
+`now` 是一個用來快速部署靜態網站的工具，支援多種不同的 Hosting 提供者進行部署。初版重點是包裝與協調，不重新實作雲端 provider 的部署協定。
 
 ## Build, test, lint
 
