@@ -10,6 +10,19 @@
 
 * * *
 
+## [0.1.4] - 2026-08-09
+
+### 變更
+
+- 將 README、PRD、Copilot Instructions 與套件描述統一聚焦於「快速部署靜態網站、支援多種 Hosting 提供者」的產品定位，不再過度強調底層 Rust 實作。
+- 更新公開網站的 meta description、Open Graph、Twitter description 與 Schema.org 結構化資料，並調整 Hero、Why 與 Footer 文案，突顯一行命令完成部署。
+
+### 修正
+
+- 修正 npm OIDC 發布流程：移除 `actions/setup-node` 的 `registry-url` 以避免空的 auth token 阻斷 GitHub OIDC token exchange，並以 `NPM_CONFIG_REGISTRY` 指定 registry，解決 v0.1.3 發布時 npm trusted publishing 回應 E404 的問題。
+
+* * *
+
 ## [0.1.3] - 2026-08-09
 
 ### 新增
@@ -79,7 +92,8 @@
 - 提供 macOS Apple Silicon、macOS Intel、Linux x64 glibc 與 Windows x64 原生執行檔及 SHA-256 checksum。
 - 提供 npm、Unix-like 安裝腳本、Windows PowerShell 安裝腳本與 GitHub Release 發布流程。
 
-[Unreleased]: https://github.com/doggy8088/now/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/doggy8088/now/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/doggy8088/now/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/doggy8088/now/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/doggy8088/now/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/doggy8088/now/compare/v0.1.0...v0.1.1
