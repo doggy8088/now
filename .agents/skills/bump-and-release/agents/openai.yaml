@@ -1,0 +1,4 @@
+interface:
+  display_name: "Bump and Release"
+  short_description: "Bump versions, publish releases, and verify CI"
+  default_prompt: "Use $bump-and-release to bump the release version, update the changelog, publish it, and verify CI and npm."
