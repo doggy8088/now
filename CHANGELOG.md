@@ -10,6 +10,16 @@
 
 * * *
 
+## [0.1.3] - 2026-08-09
+
+### 新增
+
+- `now config set --help` 顯示可用的設定鍵、值格式與秘密值管理說明。
+- Azure Storage Blob 使用預設 `now` 命令部署且尚未設定 `azure_blob.prefix` 時，可互動輸入並保存 Blob 路徑前綴。
+- 新增 `bump-and-release` 發版技能與版本更新、CHANGELOG 區塊擷取腳本，串接版本檢查、本機驗證與發版查證流程。
+
+* * *
+
 ## [0.1.2] - 2026-07-19
 
 ### 新增
@@ -69,7 +79,8 @@
 - 提供 macOS Apple Silicon、macOS Intel、Linux x64 glibc 與 Windows x64 原生執行檔及 SHA-256 checksum。
 - 提供 npm、Unix-like 安裝腳本、Windows PowerShell 安裝腳本與 GitHub Release 發布流程。
 
-[Unreleased]: https://github.com/doggy8088/now/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/doggy8088/now/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/doggy8088/now/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/doggy8088/now/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/doggy8088/now/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/doggy8088/now/releases/tag/v0.1.0
