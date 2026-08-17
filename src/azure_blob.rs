@@ -5,6 +5,7 @@ use reqwest::blocking::Client;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
 use std::fs;
 use std::path::{Component, Path};
+use std::time::Duration;
 use url::Url;
 use walkdir::WalkDir;
 
@@ -58,7 +59,16 @@ pub fn upload_directory(
         config.azure_blob.prefix.as_deref(),
         source,
         verbose,
+        request_timeout(config.azure_blob.timeout_secs),
     )
+}
+
+/// Maps the config value to a reqwest timeout. `None` or `0` disables the
+/// request-level timeout so large uploads are not cut off mid-transfer.
+fn request_timeout(timeout_secs: Option<u64>) -> Option<Duration> {
+    timeout_secs
+        .filter(|secs| *secs > 0)
+        .map(Duration::from_secs)
 }
 
 pub fn public_blob_url_for_relative_path(
@@ -86,6 +96,7 @@ pub fn upload_directory_to_sas_url(
     prefix: Option<&str>,
     source: &Path,
     verbose: bool,
+    timeout: Option<Duration>,
 ) -> Result<AzureBlobUploadSummary> {
     if !source.is_dir() {
         bail!(
@@ -94,7 +105,7 @@ pub fn upload_directory_to_sas_url(
         );
     }
 
-    let client = Client::new();
+    let client = Client::builder().timeout(timeout).build()?;
     let mut summary = AzureBlobUploadSummary { files: 0, bytes: 0 };
 
     for entry in WalkDir::new(source).sort_by_file_name() {
@@ -348,10 +359,44 @@ mod tests {
         });
 
         let sas_url = format!("http://{address}/container?sv=1&sig=secret");
-        let summary = upload_directory_to_sas_url(&sas_url, None, site.path(), false).unwrap();
+        let summary =
+            upload_directory_to_sas_url(&sas_url, None, site.path(), false, None).unwrap();
         handle.join().unwrap();
 
         assert_eq!(summary.files, 1);
         assert_eq!(summary.bytes, 11);
+    }
+
+    #[test]
+    fn honors_configured_request_timeout() {
+        let site = TempDir::new().unwrap();
+        site.child("big.csv").write_str("xxxxxxxxxx").unwrap();
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buf = [0_u8; 4096];
+            let _ = stream.read(&mut buf);
+            thread::sleep(Duration::from_millis(400));
+            let _ = stream.write_all(b"HTTP/1.1 201 Created\r\nContent-Length: 0\r\n\r\n");
+        });
+
+        let sas_url = format!("http://{address}/container?sv=1&sig=secret");
+        let result = upload_directory_to_sas_url(
+            &sas_url,
+            None,
+            site.path(),
+            false,
+            Some(Duration::from_millis(150)),
+        );
+        let _ = handle.join();
+
+        let err = result.expect_err("expected upload to time out");
+        let chain = format!("{err:?}");
+        assert!(
+            chain.to_lowercase().contains("timed out"),
+            "expected a timeout error, got: {chain}"
+        );
     }
 }

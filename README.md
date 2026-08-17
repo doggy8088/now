@@ -219,6 +219,8 @@ now config set azure_blob.sas_url_env NOW_AZURE_BLOB_SAS_URL
 
 SAS URL 必須指向 container，例如 Azure Static Website 常用的 `$web` container，且需要具備建立或寫入 blob 的權限。部署時會對每個檔案呼叫 Azure Blob Put Blob API，並使用 `x-ms-blob-type: BlockBlob`。
 
+每個檔案的上傳預設**沒有時間限制**，大型檔案（如彙整 CSV）也能完整上傳。若要避免卡住的連線無限等待，可設定 `azure_blob.timeout_secs`（單一檔案上傳的秒數上限），設為 `0` 或不設則停用；CLI 也可用 `--timeout-secs` 單次覆寫。
+
 ```sh
 PUT https://mystorageaccount.blob.core.windows.net/$web/<file>?<sas-query>
 ```
@@ -317,9 +319,10 @@ now --source dist
 now deploy --source dist
 now deploy --prefix releases/2026-07-18
 now deploy --remote_dir /public_html/releases/2026-07-18
+now deploy --timeout-secs 600
 ```
 
-`--source` 覆寫 `source`，`--prefix` 覆寫 `azure_blob.prefix`，`--remote_dir` 覆寫 `ftp.remote_dir`。這些值只套用於當次部署，不會改寫 `.now.json`。`--remote-dir` 也可作為 `--remote_dir` 的別名。
+`--source` 覆寫 `source`，`--prefix` 覆寫 `azure_blob.prefix`，`--timeout-secs` 覆寫 `azure_blob.timeout_secs`，`--remote_dir` 覆寫 `ftp.remote_dir`。這些值只套用於當次部署，不會改寫 `.now.json`。`--remote-dir` 也可作為 `--remote_dir` 的別名。
 
 * * *
 

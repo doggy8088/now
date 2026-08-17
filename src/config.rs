@@ -118,6 +118,8 @@ pub struct AzureBlobConfig {
     pub overwrite: Option<bool>,
     pub base_url: Option<String>,
     pub prefix: Option<String>,
+    /// Per-upload HTTP request timeout in seconds; `0` or unset disables it.
+    pub timeout_secs: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

@@ -25,6 +25,7 @@ pub struct DeployRequest {
     pub path_was_explicit: bool,
     pub provider: Option<ProviderKind>,
     pub prefix: Option<String>,
+    pub timeout_secs: Option<u64>,
     pub remote_dir: Option<String>,
     pub dry_run: bool,
     pub json: bool,
@@ -116,6 +117,9 @@ pub fn execute_deploy(request: DeployRequest) -> Result<()> {
     };
     if let Some(prefix) = request.prefix.as_deref() {
         config.azure_blob.prefix = Some(prefix.to_owned());
+    }
+    if let Some(timeout_secs) = request.timeout_secs {
+        config.azure_blob.timeout_secs = Some(timeout_secs);
     }
     if let Some(remote_dir) = request.remote_dir.as_deref() {
         config.ftp.remote_dir = Some(remote_dir.to_owned());
@@ -944,6 +948,7 @@ mod tests {
             path_was_explicit: false,
             provider: None,
             prefix: None,
+            timeout_secs: None,
             remote_dir: None,
             dry_run: false,
             json: false,

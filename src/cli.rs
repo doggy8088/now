@@ -41,6 +41,13 @@ pub struct Cli {
     prefix: Option<String>,
 
     #[arg(
+        long,
+        value_name = "SECONDS",
+        help = "Override azure_blob.timeout_secs"
+    )]
+    timeout_secs: Option<u64>,
+
+    #[arg(
         long = "remote_dir",
         visible_alias = "remote-dir",
         value_name = "PATH",
@@ -80,6 +87,13 @@ struct DeployArgs {
 
     #[arg(long, value_name = "PREFIX", help = "Override azure_blob.prefix")]
     prefix: Option<String>,
+
+    #[arg(
+        long,
+        value_name = "SECONDS",
+        help = "Override azure_blob.timeout_secs"
+    )]
+    timeout_secs: Option<u64>,
 
     #[arg(
         long = "remote_dir",
@@ -158,6 +172,7 @@ Available config keys:
     azure_blob.overwrite              true or false
     azure_blob.base_url               Azure-specific base URL
     azure_blob.prefix                 Path prefix for uploaded files
+    azure_blob.timeout_secs           Per-upload timeout in seconds (0 or unset = disabled)
 
   Azure Static Web App:
     azure_swa.app_name                Static Web App name
@@ -234,6 +249,7 @@ fn execute(cli: Cli) -> Result<()> {
             source: args.source,
             provider: args.provider,
             prefix: args.prefix,
+            timeout_secs: args.timeout_secs,
             remote_dir: args.remote_dir,
             dry_run: args.dry_run,
             json: args.json,
@@ -249,6 +265,7 @@ fn execute(cli: Cli) -> Result<()> {
             source: cli.source,
             provider: None,
             prefix: cli.prefix,
+            timeout_secs: cli.timeout_secs,
             remote_dir: cli.remote_dir,
             dry_run: false,
             json: false,
