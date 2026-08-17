@@ -10,6 +10,18 @@
 
 * * *
 
+## [0.2.0] - 2026-08-18
+
+### 新增
+
+- Azure Storage Blob 部署新增 `azure_blob.timeout_secs` 設定與 `--timeout-secs` 旗標，可設定單一檔案上傳的逾時秒數；設為 `0` 或不設則停用。
+
+### 修正
+
+- 修正 Azure Storage Blob 上傳大型檔案（如彙整 CSV）時因 reqwest blocking client 預設 30 秒請求逾時而以「operation timed out」中斷的問題；未設定逾時時不再截斷大型檔案上傳，仍由 TCP 層保護避免卡死連線無限等待。
+
+* * *
+
 ## [0.1.4] - 2026-08-09
 
 ### 變更
@@ -92,7 +104,8 @@
 - 提供 macOS Apple Silicon、macOS Intel、Linux x64 glibc 與 Windows x64 原生執行檔及 SHA-256 checksum。
 - 提供 npm、Unix-like 安裝腳本、Windows PowerShell 安裝腳本與 GitHub Release 發布流程。
 
-[Unreleased]: https://github.com/doggy8088/now/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/doggy8088/now/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/doggy8088/now/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/doggy8088/now/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/doggy8088/now/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/doggy8088/now/compare/v0.1.1...v0.1.2
